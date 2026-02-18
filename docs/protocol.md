@@ -13,12 +13,12 @@
 | `SYNC_RESPONSE` | Return requested messages + Merkle checkpoint | §5 |
 | `PEER_LIST_REQUEST` | Request known peers (paginated) | §4 |
 | `PEER_LIST_RESPONSE` | Return known peers | §4 |
-| `REQUEST` | Broadcast a need | §6 |
-| `PROPOSE` | Submit a solution (optionally answering a REQUEST) | §6 |
-| `WITHDRAW` | Author withdraws a proposal | §6 |
-| `ADOPT` | Node reports local adoption of a proposal (success/failure) | §6 |
-| `VOTE` | Endorse, reject, or abstain on a proposal | §7 |
-| `REPUTATION_GOSSIP` | Share signed reputation assessments of peers | §8 |
+| `REQUEST` | Broadcast a need | §7 |
+| `PROPOSE` | Submit a solution (optionally answering a REQUEST) | §7 |
+| `WITHDRAW` | Author withdraws a proposal | §7 |
+| `ADOPT` | Node reports local adoption of a proposal (success/failure) | §7 |
+| `VOTE` | Endorse, reject, or abstain on a proposal | §8 |
+| `REPUTATION_GOSSIP` | Share signed reputation assessments of peers | §9 |
 | `STORAGE_CHALLENGE` | Adjacency-proof challenge to a shard holder | §6 |
 | `STORAGE_PROOF` | Response to a storage challenge | §6 |
 | `SHARD_QUERY` | Ask a peer for available shards by content hash | §6 |
