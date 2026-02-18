@@ -647,3 +647,162 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
 - **Input:** Old key submitted 2 proposals, then KEY_ROTATE to new key
 - **Expected:** New key can submit 1 more proposal in the rolling window. 2nd proposal from new key MUST be rejected.
 - **Spec reference:** §6 — Rate limiting, §1 — Tenure continuity
+
+---
+
+## 14. Identity Linking (§1)
+
+### LINK-01: DID_LINK happy path
+
+- **Description:** Root (Keypair A) links child (Keypair B). Envelope signed by root, `child_signature` proves child consent.
+- **Input:**
+  - Root = Keypair A (`4cb5abf6ad79fbf5abbccafcc269d85cd2651ed4b885b5869f241aedf0a5ba29`)
+  - Child = Keypair B (`7422b9887598068e32c4448a949adb290d0f4e35b9e01b0ee5f1a1e600fe2674`)
+  - `child_signature` signing input: `root_key || child_key` as raw bytes (64 bytes total):
+    ```
+    4cb5abf6ad79fbf5abbccafcc269d85cd2651ed4b885b5869f241aedf0a5ba297422b9887598068e32c4448a949adb290d0f4e35b9e01b0ee5f1a1e600fe2674
+    ```
+  - `child_signature` (Keypair B signs the above):
+    ```
+    c3432f9706d926e7312c4b25555306e85db640dfa38ec8bbe453a5b99fd98d17c8df0d34622d8bed3bf03a1ca3b15dc135d45abf3d34db4153ca15fecc0a920b
+    ```
+  - Payload:
+    ```json
+    {
+      "child_key": "7422b9887598068e32c4448a949adb290d0f4e35b9e01b0ee5f1a1e600fe2674",
+      "child_signature": "c3432f9706d926e7312c4b25555306e85db640dfa38ec8bbe453a5b99fd98d17c8df0d34622d8bed3bf03a1ca3b15dc135d45abf3d34db4153ca15fecc0a920b",
+      "root_key": "4cb5abf6ad79fbf5abbccafcc269d85cd2651ed4b885b5869f241aedf0a5ba29"
+    }
+    ```
+  - Envelope `from` = Keypair A public key, `type` = `"DID_LINK"`
+- **Expected:**
+  1. Verify envelope signature against Keypair A → `true`
+  2. Verify `child_signature` against `root_key || child_key` using Keypair B → `true`
+  3. Link accepted. Keypair B is now an authorized key for Keypair A's identity.
+- **Spec reference:** §1 — DID_LINK
+
+### LINK-02: DID_LINK conflict — same child, two roots
+
+- **Description:** Second DID_LINK claiming the same child key for a different root MUST be rejected (first-seen wins).
+- **Input:**
+  - First DID_LINK: root=A, child=B (already processed, as in LINK-01)
+  - Second DID_LINK: root=C (some other keypair), child=B, with valid child_signature from B
+- **Expected:** Second DID_LINK MUST be rejected. Keypair B remains linked to A.
+- **Spec reference:** §1 — "First valid DID_LINK for a given child key wins"
+
+### LINK-03: DID_LINK — child is already a root
+
+- **Description:** A key that is already a root of another identity MUST NOT be linked as a child.
+- **Input:**
+  - Keypair A is a root identity (has linked children or simply exists as a registered node)
+  - DID_LINK: root=C, child=A, with valid child_signature from A
+- **Expected:** MUST be rejected. A root key cannot become a child.
+- **Spec reference:** §1 — "A child key MUST NOT also be a root key of another identity"
+
+### LINK-04: DID_REVOKE happy path
+
+- **Description:** Root revokes a child key. Messages from the revoked key are rejected going forward.
+- **Input:**
+  - Identity: root=A, child=B (linked via LINK-01)
+  - DID_REVOKE signed by A: `revoked_key` = B
+  - Subsequently, B sends a VOTE message
+- **Expected:**
+  1. DID_REVOKE accepted.
+  2. VOTE from B MUST be rejected (B is no longer an authorized key).
+  3. B is permanently deauthorized from A's identity.
+- **Spec reference:** §1 — DID_REVOKE
+
+### LINK-05: DID_REVOKE — non-child key
+
+- **Description:** Root attempts to revoke a key that is not one of its authorized children.
+- **Input:**
+  - Identity: root=A, child=B
+  - DID_REVOKE signed by A: `revoked_key` = C (not a child of A)
+- **Expected:** MUST be rejected or ignored. No effect on C.
+- **Spec reference:** §1 — DID_REVOKE (only root can revoke its own children)
+
+### LINK-06: DID_REVOKE — root revokes itself
+
+- **Description:** Root attempts to revoke itself.
+- **Input:**
+  - DID_REVOKE signed by A: `revoked_key` = A (same as root_key)
+- **Expected:** MUST be rejected. Root cannot revoke itself. Use KEY_ROTATE for root compromise.
+- **Spec reference:** §1 — "The root key MUST NOT revoke itself"
+
+### LINK-07: Vote attribution
+
+- **Description:** Child votes on a proposal; vote is attributed to root identity. A subsequent vote from root supersedes.
+- **Input:**
+  1. Identity: root=A, child=B
+  2. B sends VOTE(proposal_id=P, stance=endorse)
+  3. A sends VOTE(proposal_id=P, stance=reject)
+- **Expected:**
+  1. B's vote is attributed to root identity A.
+  2. A's subsequent vote supersedes B's vote.
+  3. Identity A's effective vote on P = reject.
+  4. Only 1 vote counted for identity A (not 2 distinct votes).
+- **Spec reference:** §1 — "Single vote per proposal", §7 — Vote Rules
+
+### LINK-08: Proposal rate limit per identity
+
+- **Description:** The 3-proposals-per-7-days limit applies across all keys in an identity.
+- **Input:**
+  1. Identity: root=A, children=B, C
+  2. B submits PROPOSE (1 of 3)
+  3. A submits PROPOSE (2 of 3)
+  4. C submits PROPOSE (3 of 3)
+  5. B submits PROPOSE (4th attempt)
+- **Expected:** 4th proposal MUST be rejected. The identity has exhausted its 3-proposal allowance.
+- **Spec reference:** §1 — "Single proposal rate limit", §6 — Rate limiting
+
+### LINK-09: Collusion exemption
+
+- **Description:** Keys within the same identity with 100% vote correlation MUST NOT trigger collusion detection.
+- **Input:**
+  - Identity: root=A, child=B
+  - A and B vote identically on 25 consecutive proposals (well above the 95%/20+ threshold)
+- **Expected:** No collusion flag. Keys in the same identity are exempt from vote correlation and VDF timing correlation analysis.
+- **Spec reference:** §1 — "Collusion detection exemption", §10 — Collusion Detection
+
+### LINK-10: Headcount counting
+
+- **Description:** An identity with multiple authorized keys counts as 1 for minimum voter and cold start headcount.
+- **Input:**
+  - Identity: root=A, children=B, C, D (4 keys total, 1 identity)
+  - 2 other independent identities (E and F)
+  - All vote on proposal P during cold start
+  - active_nodes = 6 (A, B, C, D, E, F as connected peers)
+- **Expected:**
+  - Distinct voter count = 3 (identity A, identity E, identity F) — meets minimum voter threshold of 3
+  - For cold start headcount: 3 identities voted, not 6 nodes
+  - Identity A counts as 1 regardless of how many of its keys (A, B, C, D) cast votes
+- **Spec reference:** §1 — "Quorum and headcount", §7 — Minimum voters, Cold Start
+
+### LINK-11: KEY_ROTATE by root — new root inherits authorized keys
+
+- **Description:** When a root key rotates, the new root inherits all authorized children.
+- **Input:**
+  1. Identity: root=A, child=B
+  2. A performs KEY_ROTATE to A' (new keypair)
+  3. B sends a VOTE message
+- **Expected:**
+  1. KEY_ROTATE accepted (standard dual-signature verification).
+  2. B remains an authorized key under root A'.
+  3. B's vote is attributed to identity A' (the new root).
+  4. No DID_LINK re-signing required.
+- **Spec reference:** §1 — "KEY_ROTATE Interaction"
+
+### LINK-12: Re-registration after revocation
+
+- **Description:** A revoked key re-registers independently at starting reputation; it cannot rejoin any identity.
+- **Input:**
+  1. Identity: root=A, child=B
+  2. A revokes B via DID_REVOKE
+  3. B computes new VDF proof and re-registers as independent node
+  4. C attempts DID_LINK: root=C, child=B
+- **Expected:**
+  1. B re-registers successfully with reputation 0.2 (2000 fixed-point).
+  2. B has no connection to identity A — A's reputation is unaffected.
+  3. DID_LINK(root=C, child=B) MUST be rejected — revoked keys cannot be re-linked to any identity.
+  4. B operates as an independent root identity only.
+- **Spec reference:** §1 — "After revocation"
