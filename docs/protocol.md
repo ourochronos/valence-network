@@ -25,6 +25,19 @@
 | `SHARD_QUERY_RESPONSE` | Return available shard indices and hashes | §6 |
 | `KEY_ROTATE` | Rotate identity keypair (signed by both old and new keys) | §1 |
 | `KEY_CONFLICT` | Broadcast conflicting KEY_ROTATE discovered during partition heal | §1 |
+| `DID_LINK` | Authorize a child key under a root identity | §1 |
+| `DID_REVOKE` | Revoke a child key from an identity | §1 |
+| `SHARE` | Announce hosted (self-served) content | §6 |
+| `REPLICATE_REQUEST` | Request network-stored erasure-coded replication | §6 |
+| `REPLICATE_ACCEPT` | Signal willingness to store shards | §6 |
+| `SHARD_ASSIGNMENT` | Confirm shard distribution to providers | §6 |
+| `RENT_PAYMENT` | Broadcast rent payment for a billing cycle | §6 |
+| `CONTENT_REQUEST` | Request content download (direct stream) | §6 |
+| `CONTENT_RESPONSE` | Return content data (direct stream) | §6 |
+| `CONTENT_WITHDRAW` | Withdraw replicated content | §6 |
+| `FLAG` | Flag content for policy violations | §6 |
+| `COMMENT` | Discussion on proposals and requests | §7 |
+| `CHALLENGE_RESULT` | Broadcast storage challenge outcome | §6 |
 
 ## Proposal Lifecycle
 
