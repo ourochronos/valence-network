@@ -1,94 +1,60 @@
-# Protocol
+# Protocol Quick Reference
+
+> This is a quick reference. The authoritative specification is [v0.md](v0.md).
 
 ## Message Types
 
-### Discovery
-
-- `ANNOUNCE` — node joins the network, shares identity and capabilities
-- `DISCOVER` — request peer list from known nodes
-- `PEERS` — response with known peers
-
-### Proposals
-
-- `REQUEST` — broadcast a need to the network
-- `PROPOSE` — submit a solution (optionally in response to a request)
-- `EDIT` — propose a modification to an existing proposal
-- `WITHDRAW` — author withdraws a proposal
-
-### Consensus
-
-- `VOTE` — endorse or reject a proposal (weighted by reputation)
-- `RATIFY` — proposal reaches consensus threshold (informational, not authoritative)
-
-### Reputation
-
-- `REPUTATION_GOSSIP` — share reputation observations with peers
-- `REPUTATION_QUERY` — ask a peer for their view of a node's reputation
-
-### Verification
-
-- `CLAIM_VERIFY` — request verification of a proposal's claims
-- `CLAIM_RESULT` — verification outcome
-- `STORAGE_CHALLENGE` — random hash challenge to a storage provider
-- `STORAGE_PROOF` — response to a storage challenge
-
-### Data
-
-- `SHARD_STORE` — request a node to store an encrypted shard
-- `SHARD_RETRIEVE` — request a stored shard
-- `SHARD_ACK` — acknowledge shard storage/retrieval
+| Type | Purpose | Section |
+|---|---|---|
+| `PEER_ANNOUNCE` | Announce presence, capabilities, addresses | §4 |
+| `AUTH_CHALLENGE` | Authentication handshake (initiator sends nonce) | §3 |
+| `AUTH_RESPONSE` | Authentication handshake (responder proves identity + VDF) | §3 |
+| `SYNC_REQUEST` | Pull missed messages from a peer | §5 |
+| `SYNC_RESPONSE` | Return requested messages + Merkle checkpoint | §5 |
+| `PEER_LIST_REQUEST` | Request known peers (paginated) | §4 |
+| `PEER_LIST_RESPONSE` | Return known peers | §4 |
+| `REQUEST` | Broadcast a need | §6 |
+| `PROPOSE` | Submit a solution (optionally answering a REQUEST) | §6 |
+| `WITHDRAW` | Author withdraws a proposal | §6 |
+| `ADOPT` | Node reports local adoption of a proposal (success/failure) | §6 |
+| `VOTE` | Endorse, reject, or abstain on a proposal | §7 |
+| `REPUTATION_GOSSIP` | Share signed reputation assessments of peers | §8 |
+| `STORAGE_CHALLENGE` | Adjacency-proof challenge to a shard holder | §6 |
+| `STORAGE_PROOF` | Response to a storage challenge | §6 |
+| `SHARD_QUERY` | Ask a peer for available shards by content hash | §6 |
+| `SHARD_QUERY_RESPONSE` | Return available shard indices and hashes | §6 |
+| `KEY_ROTATE` | Rotate identity keypair (signed by both old and new keys) | §1 |
+| `KEY_CONFLICT` | Broadcast conflicting KEY_ROTATE discovered during partition heal | §1 |
 
 ## Proposal Lifecycle
 
-```
-draft → open → voting → converging → ratified
-                  ↓                      ↓
-               rejected              adopted (per-node decision)
-                  ↓
-              withdrawn (by author at any stage)
-```
+Each node tracks its own view — there is no global state machine.
 
-## Consensus Threshold
+| State | Meaning |
+|---|---|
+| **Open** | Proposal exists, votes accumulating, deadline not reached |
+| **Converging** | Weighted endorsement exceeds local threshold |
+| **Ratified** | Node considers the proposal accepted by the network |
+| **Rejected** | Weighted rejection exceeds threshold, or deadline passed without ratification |
+| **Adopted** | This node has applied the proposal locally |
+| **Expired** | Voting deadline passed |
+| **Withdrawn** | Author withdrew |
 
-TBD — needs design work. Questions:
+Edits are expressed as new proposals with `supersedes` pointing to the original.
 
-- Fixed threshold vs. dynamic based on network size?
-- Quorum requirements?
-- Time-bounded voting periods?
-- How to handle contentious proposals (close votes)?
-- Supermajority for protocol-level changes vs. simple majority for content?
+## Governance Tiers
 
-## Transport
+| Tier | Threshold | Quorum | Voting Period | Notes |
+|---|---|---|---|---|
+| **Standard** | 0.67 | max(active_nodes × 0.1, total_rep × 0.10) | 14d default, 90d max | Skills, configs, docs, code |
+| **Constitutional** | 0.90 | 30% of total network reputation | 90d minimum | Protocol core: rep floor, Sybil resistance, voting rules, thresholds, identity, meta-governance |
 
-TBD — candidates:
+Constitutional proposals also require a **30-day cooling period** between ratification and activation.
 
-- libp2p (proven P2P stack, used by IPFS/Filecoin)
-- Custom gossip over WebSocket/QUIC
-- Hybrid: structured DHT for discovery, gossip for propagation
+## Network Phases
 
-## Identity
-
-TBD — candidates:
-
-- Ed25519 keypairs (simple, proven)
-- DIDs (interoperable, but complex)
-- Something simpler that can bridge to DIDs later
-
-## Anti-Fragmentation
-
-- Nodes periodically reach out to random peers outside their usual neighborhood
-- Hybrid push/pull gossip — nodes actively pull ("what have you seen since X?"), not just passively receive
-- Any node that can reach any peer can eventually reach the whole network
-
-## Protocol Versioning
-
-Every message carries a protocol version. Versions have baked-in EOLs. See [evolution.md](evolution.md) for the full lifecycle.
-
-Nodes must upgrade or they get dropped. Upgrading should be trivial — the proposal contains the new spec.
-
-## Open Questions
-
-- How large can proposals be? (Inline for small, sharded for large?)
-- Conflict resolution for competing proposals addressing the same request?
-- Garbage collection — when do rejected/expired proposals get pruned?
-- v0 specification — what's the minimal viable protocol that can propose changes to itself?
+| Active Nodes | Phase |
+|---|---|
+| < 16 | **Frozen** — content proposals only, no governance |
+| ≥ 16 (sustained 3–7 days) | **Standard governance** activates (Tier 1). First 30 days use headcount voting. |
+| ≥ 1,024 (sustained 30 days) | **Constitutional governance** activates (Tier 2). All v0 parameters become Tier 2 protected. |

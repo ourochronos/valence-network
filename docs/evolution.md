@@ -32,11 +32,26 @@ Upgrading should be trivial. The proposal *is* the upgrade — it contains the n
 
 The goal: protocol as data, not code. Nodes interpret the protocol spec. A new version is a new spec to interpret. Adoption is mechanical, not a rebuild.
 
+## Governance Tiers for Protocol Changes
+
+Protocol changes are **Tier 2 (constitutional) proposals** once the network reaches critical mass (≥ 1,024 nodes sustained 30 days). They require:
+
+- **0.90** weighted endorsement threshold
+- **30%** of total network reputation as quorum
+- **90-day minimum** voting period
+- **30-day cooling period** between ratification and activation (allows nodes to evaluate and exit if they disagree)
+
+Below critical mass, the protocol is frozen — no changes possible.
+
 ## EOL Timelines
 
-Set by the community as part of the proposal. Factors:
+Set by the community as part of the proposal. Minimums:
 
-- **Breaking scope** — how much changes? Minor refinements get short EOLs. Major restructuring gets long runways.
+- **Minor changes:** 30 days minimum EOL
+- **Major changes:** 90+ days minimum EOL
+
+Additional factors:
+
 - **Network readiness** — what percentage of nodes need to adopt before the old version can safely die?
 - **Contentiousness** — close votes suggest the community needs more time
 
