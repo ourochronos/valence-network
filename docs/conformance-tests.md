@@ -159,7 +159,7 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
 
 ---
 
-## 4. VDF (§9)
+## 4. VDF (§10)
 
 ### VDF-01: Iteration semantics (difficulty=10)
 
@@ -180,7 +180,7 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   h[10] = SHA-256(h[9])         = 449bcdcf7459a1bb9b5ad418b3c2f96623fbf19080d30bcacccb664bab6abaa3
   ```
 - **Output:** `h[10]` = `449bcdcf7459a1bb9b5ad418b3c2f96623fbf19080d30bcacccb664bab6abaa3`
-- **Spec reference:** §9 — VDF iteration semantics
+- **Spec reference:** §10 — VDF iteration semantics
 
 ### VDF-02: Checkpoint extraction
 
@@ -199,7 +199,7 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   checkpoint[9]  = h[9]  = 47d8b22fe73482b8c2fc6bef4d3a878f0b42ed1cd874de3cd1b086d7bc89e495
   checkpoint[10] = h[10] = 449bcdcf7459a1bb9b5ad418b3c2f96623fbf19080d30bcacccb664bab6abaa3
   ```
-- **Spec reference:** §9 — Intermediate checkpoints
+- **Spec reference:** §10 — Intermediate checkpoints
 
 ### VDF-03: Segment verification
 
@@ -209,18 +209,18 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   - checkpoint[4] = `18a99c7ec36bd99d88cf34e6efa39ba2ce6304e8e94375796c43a1882a181536`
   - Segment length: 1 iteration (for difficulty=10)
 - **Verification:** SHA-256(checkpoint[3]) = `18a99c7ec36bd99d88cf34e6efa39ba2ce6304e8e94375796c43a1882a181536` = checkpoint[4] ✓
-- **Spec reference:** §9 — Verifiers MUST verify segments
+- **Spec reference:** §10 — Verifiers MUST verify segments
 
 ---
 
-## 5. Merkle Tree (§11)
+## 5. Merkle Tree (§12)
 
 ### MERKLE-01: Empty proposal set
 
 - **Description:** Empty active proposal set → Merkle root is SHA-256 of empty byte string.
 - **Input:** No proposals
 - **Expected root:** `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
-- **Spec reference:** §11 — Merkle Consistency
+- **Spec reference:** §12 — Merkle Consistency
 
 ### MERKLE-02: Single proposal
 
@@ -228,7 +228,7 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
 - **Input:** Proposal ID = `a1b2c3d4e5f6`
 - **Leaf hash:** SHA-256("a1b2c3d4e5f6") = `bde81e9384b7848e57951ec32c7344459233235bfa519d7396ae3406014a06f4`
 - **Expected root:** `bde81e9384b7848e57951ec32c7344459233235bfa519d7396ae3406014a06f4`
-- **Spec reference:** §11
+- **Spec reference:** §12
 
 ### MERKLE-03: Two proposals
 
@@ -238,7 +238,7 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   - L1 = SHA-256("a1b2c3d4e5f6") = `bde81e9384b7848e57951ec32c7344459233235bfa519d7396ae3406014a06f4`
   - L2 = SHA-256("b2c3d4e5f6a1") = `fabd7d26ffca35f755c4f17604bacd2ca74638b836e0ccc8f7c06cb5bc9a0e5d`
 - **Expected root:** SHA-256(L1 || L2) = `cd4eacb7493443618c0a6325db660723d010873c4e188e62eda660021b0de9a0`
-- **Spec reference:** §11
+- **Spec reference:** §12
 
 ### MERKLE-04: Three proposals (left-biased, odd count)
 
@@ -259,7 +259,7 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   - N12 = SHA-256(L1 || L2) = `cd4eacb7493443618c0a6325db660723d010873c4e188e62eda660021b0de9a0`
   - root = SHA-256(N12 || L3) = `e0b65593156cd8bd67f8c000a8bbd71fe708ec30b05a903adc64273c2c81a70e`
 - **Expected root:** `e0b65593156cd8bd67f8c000a8bbd71fe708ec30b05a903adc64273c2c81a70e`
-- **Spec reference:** §11
+- **Spec reference:** §12
 
 ### MERKLE-05: Five proposals (full tree)
 
@@ -286,7 +286,7 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   - N1234 = SHA-256(N12 || N34) = `101f70ccb36f106682a8797bd397407a27a979071e29e28354655150394e0efe`
   - root = SHA-256(N1234 || L5) = `d15072ca65d39c1f12e1f402c49eb9d2760d7838aad99f52801d58ac3bb8398d`
 - **Expected root:** `d15072ca65d39c1f12e1f402c49eb9d2760d7838aad99f52801d58ac3bb8398d`
-- **Spec reference:** §11
+- **Spec reference:** §12
 
 ---
 
@@ -311,7 +311,7 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
 
 ---
 
-## 7. Fixed-Point Reputation Formula (§8)
+## 7. Fixed-Point Reputation Formula (§9)
 
 ### REP-01: Standard reputation computation
 
@@ -332,7 +332,7 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
               = 6208  (truncated)
   ```
 - **Expected result:** `6208` (represents 0.6208)
-- **Spec reference:** §8 — Reputation Propagation, Evaluation order
+- **Spec reference:** §9 — Reputation Propagation, Evaluation order
 
 ### REP-02: α=0 — pure peer assessment, capped
 
@@ -345,13 +345,13 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   ```
   But capped at `2000` because < 3 distinct ASN assessors.
 - **Expected result:** `2000` (capped at starting reputation)
-- **Spec reference:** §8 — When α = 0
+- **Spec reference:** §9 — When α = 0
 
 ### REP-03: α=0 — uncapped with ≥3 ASN-distinct assessors
 
 - **Description:** Same as REP-02 but with ≥3 assessors from distinct ASNs.
 - **Expected result:** `6727` (uncapped)
-- **Spec reference:** §8
+- **Spec reference:** §9
 
 ### REP-04: α=0.6 — maximum direct weight
 
@@ -365,11 +365,50 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
          = 5690  (truncated)
   ```
 - **Expected result:** `5690` (represents 0.5690)
-- **Spec reference:** §8
+- **Spec reference:** §9
+
+### REP-05: Gain dampening for multi-key identity
+
+- **Description:** Reputation gains are dampened by authorized key count using `effective_gain = raw_gain / authorized_key_count^0.75`.
+- **Input (fixed-point ×10,000):**
+  - raw_gain = 100 (represents 0.01)
+  - authorized_key_count = 2
+- **Computation (2 keys):**
+  ```
+  dampening_factor = 2^0.75 = 1.6818
+  fixed_point_factor = 16818
+  effective_gain = raw_gain × 10000 / 16818 = 100 × 10000 / 16818 = 59 (truncated)
+  ```
+- **Expected result (2 keys):** `59` (represents 0.0059)
+- **Input (4 keys):**
+  ```
+  dampening_factor = 4^0.75 = 2.8284
+  fixed_point_factor = 28284
+  effective_gain = 100 × 10000 / 28284 = 35 (truncated)
+  ```
+- **Expected result (4 keys):** `35` (represents 0.0035)
+- **Spec reference:** §1 — Gain dampening, §9
+
+### REP-06: Velocity limits at 0.2 boundary
+
+- **Description:** Recovery below 0.2 is uncapped. Above 0.2, daily velocity cap of 0.02 applies. When a gain crosses the boundary, the portion up to 0.2 is uncapped and velocity limits apply only above 0.2.
+- **Input:**
+  - Current reputation: 1800 (0.18)
+  - Earned gain in one day: 500 (0.05)
+- **Computation:**
+  ```
+  uncapped_portion = 2000 - 1800 = 200 (up to 0.2, uncapped)
+  remaining_gain = 500 - 200 = 300
+  capped_portion = min(300, 200) = 200 (daily cap of 0.02 = 200 above 0.2)
+  total_gain = 200 + 200 = 400
+  new_reputation = 1800 + 400 = 2200
+  ```
+- **Expected result:** `2200` (represents 0.22)
+- **Spec reference:** §9 — Velocity Limits
 
 ---
 
-## 8. Quorum Evaluation (§7)
+## 8. Quorum Evaluation (§8)
 
 ### QUORUM-01: Standard quorum — ratified
 
@@ -396,7 +435,7 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   8928 ≥ 6700 (0.67)  ✓ threshold met
   ```
 - **Expected result:** **Ratified** (quorum met, threshold met, ≥ 3 voters)
-- **Spec reference:** §7
+- **Spec reference:** §8
 
 ### QUORUM-02: Cold start — headcount mode
 
@@ -407,7 +446,7 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   - Total voters: 20 (majority of 20 = 11 must vote ✓, all 20 voted)
   - Endorse ratio: 15 / (15 + 3) = 0.833... ≥ 0.67 ✓
 - **Expected result:** **Ratified** (headcount majority voted, >67% endorse)
-- **Spec reference:** §7 — Cold Start
+- **Spec reference:** §8 — Cold Start
 
 ### QUORUM-03: Constitutional quorum
 
@@ -418,7 +457,7 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   - Total voter reputation: 16000 (1.6) ≥ 15600 ✓
   - Threshold: 0.90 required
 - **Expected:** Quorum met if voter rep ≥ 15600 AND endorsement ratio ≥ 9000 (0.90)
-- **Spec reference:** §7 — Constitutional quorum
+- **Spec reference:** §8 — Constitutional quorum
 
 ### QUORUM-04: Cold-start proposal under weighted voting
 
@@ -429,11 +468,11 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   - Weighted endorsement meets threshold
   - Quorum met by weight
 - **Expected result:** **Not ratified** (50% headcount floor not met: 8 < 10)
-- **Spec reference:** §7 — Cold Start
+- **Spec reference:** §8 — Cold Start
 
 ---
 
-## 9. Activity Multiplier (§7)
+## 9. Activity Multiplier (§8)
 
 ### ACT-01: High activity
 
@@ -455,7 +494,7 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   ```
 - **Expected multiplier:** 2.33
 - **Expected sustain_days:** 3
-- **Spec reference:** §7 — Network Phases
+- **Spec reference:** §8 — Network Phases
 
 ### ACT-02: Zero activity
 
@@ -469,11 +508,11 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   ```
 - **Expected multiplier:** 1.0
 - **Expected sustain_days:** 7
-- **Spec reference:** §7
+- **Spec reference:** §8
 
 ---
 
-## 10. Message Validation (§2, §5, §13)
+## 10. Message Validation (§2, §5, §14)
 
 ### VALID-01: Valid message — accepted
 
@@ -508,28 +547,28 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
 - **Description:** Messages with unrecognized type SHOULD be propagated for forward compatibility, subject to 10/sender/hour rate limit.
 - **Input:** Message with `"type": "FUTURE_TYPE"`, valid signature
 - **Expected:** Propagate (if under rate limit). Do not process.
-- **Spec reference:** §13 — Unknown Message Types
+- **Spec reference:** §14 — Unknown Message Types
 
 ### VALID-06: Unknown type — rate limited
 
 - **Description:** 11th unknown-type message from same sender within an hour MUST be dropped.
 - **Input:** 11th message with unknown type from same `from` key within 1 hour
 - **Expected:** MUST NOT propagate (exceeds 10/sender/hour limit).
-- **Spec reference:** §13
+- **Spec reference:** §14
 
 ### VALID-07: Missing signature — rejected
 
 - **Description:** Messages without a signature MUST be rejected.
 - **Input:** Envelope with `signature` field missing or empty
 - **Expected:** MUST reject. MUST NOT propagate.
-- **Spec reference:** §13 — Malformed Messages
+- **Spec reference:** §14 — Malformed Messages
 
 ### VALID-08: Invalid signature — rejected
 
 - **Description:** Messages with a signature that doesn't verify MUST be rejected.
 - **Input:** Envelope with valid structure but signature from a different key
 - **Expected:** MUST reject. MUST NOT propagate.
-- **Spec reference:** §13 — Malformed Messages
+- **Spec reference:** §14 — Malformed Messages
 
 ### VALID-09: Gossip message > 24 hours old — rejected
 
@@ -573,80 +612,80 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
 
 ---
 
-## 12. Reputation Bounds (§8)
+## 12. Reputation Bounds (§9)
 
 ### BOUNDS-01: New node starts at 0.2
 
 - **Description:** All new nodes begin with reputation 0.2 (2000 fixed-point).
 - **Expected:** Initial `overall` = 2000
-- **Spec reference:** §8 — Initial Score
+- **Spec reference:** §9 — Initial Score
 
 ### BOUNDS-02: Hard cap at 1.0
 
 - **Description:** Reputation cannot exceed 1.0 (10000 fixed-point).
 - **Input:** Node at reputation 9900 earns +200
 - **Expected:** Reputation = 10000 (capped, not 10100)
-- **Spec reference:** §8 — Score
+- **Spec reference:** §9 — Score
 
 ### BOUNDS-03: Floor at 0.1
 
 - **Description:** Reputation cannot drop below 0.1 (1000 fixed-point).
 - **Input:** Node at reputation 1100 receives -200 penalty
 - **Expected:** Reputation = 1000 (floored, not 900)
-- **Spec reference:** §8 — Floor
+- **Spec reference:** §9 — Floor
 
 ### BOUNDS-04: Daily velocity cap above 0.2
 
 - **Description:** Daily gain capped at 0.02 (200 fixed-point) when above starting score.
 - **Input:** Node at reputation 3000 (0.3) earns +500 in one day
 - **Expected:** Gain capped to 200; reputation = 3200
-- **Spec reference:** §8 — Velocity Limits
+- **Spec reference:** §9 — Velocity Limits
 
 ### BOUNDS-05: Recovery below 0.2 — uncapped
 
 - **Description:** A penalized node below 0.2 can recover without velocity limits until reaching 0.2.
 - **Input:** Node at reputation 1200 (0.12) earns +500 in one day
 - **Expected:** Reputation = 1700 (no cap, still below 2000)
-- **Spec reference:** §8 — Velocity Limits
+- **Spec reference:** §9 — Velocity Limits
 
 ### BOUNDS-06: Recovery crosses 0.2 boundary
 
 - **Description:** When recovery crosses 0.2, the gain up to 0.2 is uncapped; velocity limits apply only to the portion above 0.2.
 - **Input:** Node at reputation 1800 earns +500 in one day
 - **Expected:** Uncapped up to 2000 (+200), then capped at +200 above 2000. Total = 2200.
-- **Spec reference:** §8 — Velocity Limits
+- **Spec reference:** §9 — Velocity Limits
 
 ---
 
-## 13. Proposal Rate Limiting (§6)
+## 13. Proposal Rate Limiting (§7)
 
-### RATE-01: Node at starting reputation can propose
+### RATE-01: Node at minimum reputation can propose
 
-- **Description:** Nodes with reputation ≥ 0.2 MAY submit proposals.
-- **Input:** Node at reputation 2000 (0.2), 0 proposals in last 7 days
+- **Description:** Nodes with reputation ≥ 0.3 MAY submit proposals.
+- **Input:** Node at reputation 3000 (0.3), 0 proposals in last 7 days
 - **Expected:** Proposal accepted.
-- **Spec reference:** §6 — Rate limiting
+- **Spec reference:** §7 — Rate limiting
 
-### RATE-02: Node below starting reputation — rejected
+### RATE-02: Node below minimum reputation — rejected
 
-- **Description:** Nodes with reputation < 0.2 MUST NOT be allowed to propose.
-- **Input:** Node at reputation 1900 (0.19)
+- **Description:** Nodes with reputation < 0.3 MUST NOT be allowed to propose.
+- **Input:** Node at reputation 2900 (0.29)
 - **Expected:** MUST reject proposal.
-- **Spec reference:** §6 — Rate limiting
+- **Spec reference:** §7 — Rate limiting
 
 ### RATE-03: 4th proposal in 7 days — rejected
 
 - **Description:** Maximum 3 proposals per 7-day rolling window.
 - **Input:** Node at reputation 5000, 3 proposals already submitted in last 7 days
 - **Expected:** 4th proposal MUST be rejected.
-- **Spec reference:** §6 — Rate limiting
+- **Spec reference:** §7 — Rate limiting
 
 ### RATE-04: Rate limits transfer across KEY_ROTATE
 
 - **Description:** Proposal rate limits transfer to the new key after key rotation.
 - **Input:** Old key submitted 2 proposals, then KEY_ROTATE to new key
 - **Expected:** New key can submit 1 more proposal in the rolling window. 2nd proposal from new key MUST be rejected.
-- **Spec reference:** §6 — Rate limiting, §1 — Tenure continuity
+- **Spec reference:** §7 — Rate limiting, §1 — Tenure continuity
 
 ---
 
@@ -741,7 +780,7 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   2. A's subsequent vote supersedes B's vote.
   3. Identity A's effective vote on P = reject.
   4. Only 1 vote counted for identity A (not 2 distinct votes).
-- **Spec reference:** §1 — "Single vote per proposal", §7 — Vote Rules
+- **Spec reference:** §1 — "Single vote per proposal", §8 — Vote Rules
 
 ### LINK-08: Proposal rate limit per identity
 
@@ -753,7 +792,7 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   4. C submits PROPOSE (3 of 3)
   5. B submits PROPOSE (4th attempt)
 - **Expected:** 4th proposal MUST be rejected. The identity has exhausted its 3-proposal allowance.
-- **Spec reference:** §1 — "Single proposal rate limit", §6 — Rate limiting
+- **Spec reference:** §1 — "Single proposal rate limit", §7 — Rate limiting
 
 ### LINK-09: Collusion exemption
 
@@ -762,7 +801,7 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   - Identity: root=A, child=B
   - A and B vote identically on 25 consecutive proposals (well above the 95%/20+ threshold)
 - **Expected:** No collusion flag. Keys in the same identity are exempt from vote correlation and VDF timing correlation analysis.
-- **Spec reference:** §1 — "Collusion detection exemption", §10 — Collusion Detection
+- **Spec reference:** §1 — "Collusion detection exemption", §11 — Collusion Detection
 
 ### LINK-10: Headcount counting
 
@@ -776,7 +815,7 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   - Distinct voter count = 3 (identity A, identity E, identity F) — meets minimum voter threshold of 3
   - For cold start headcount: 3 identities voted, not 6 nodes
   - Identity A counts as 1 regardless of how many of its keys (A, B, C, D) cast votes
-- **Spec reference:** §1 — "Quorum and headcount", §7 — Minimum voters, Cold Start
+- **Spec reference:** §1 — "Quorum and headcount", §8 — Minimum voters, Cold Start
 
 ### LINK-11: KEY_ROTATE by root — new root inherits authorized keys
 
@@ -834,4 +873,299 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   2. WITHDRAW from C accepted — C is in the same identity as B (both authorized under root A).
   3. Votes for P1 stop being counted after C's WITHDRAW.
   4. WITHDRAW from D rejected — D is not in identity A.
-- **Spec reference:** §6 — WITHDRAW: "For proposals authored by an authorized key (§1 Identity Linking), any key in the same identity (including root) MAY withdraw."
+- **Spec reference:** §7 — WITHDRAW: "For proposals authored by an authorized key (§1 Identity Linking), any key in the same identity (including root) MAY withdraw."
+
+---
+
+## 15. Content Economics (§6)
+
+### CONTENT-01: Scarcity multiplier computation
+
+- **Description:** Compute the scarcity multiplier from network utilization using `scarcity_multiplier = 1 + 99 × network_utilization^4`.
+- **Input → Expected output (fixed-point ×10,000):**
+  - 0% utilization: `1 + 99 × 0^4 = 1.0` → `10000`
+  - 20% utilization: `1 + 99 × 0.2^4 = 1 + 99 × 0.0016 = 1.1584` → `11584`
+  - 50% utilization: `1 + 99 × 0.5^4 = 1 + 99 × 0.0625 = 7.1875` → `71875`
+  - 80% utilization: `1 + 99 × 0.8^4 = 1 + 99 × 0.4096 = 41.5504` → `415504`
+  - 100% utilization: `1 + 99 × 1^4 = 100.0` → `1000000`
+  - `total_allocated = 0` (no storage nodes): multiplier = `1.0` → `10000`
+- **Spec reference:** §6 — Network Capacity and Pricing
+
+### CONTENT-02: Monthly rent calculation
+
+- **Description:** Compute monthly rent for replicated content using `monthly_rent = content_size_mib × base_rate × scarcity_multiplier`.
+- **Input:**
+  - Content size: 10 MiB
+  - Scarcity multiplier: 7.1875 (50% utilization)
+  - Base rate: 0.001 per MiB per month
+- **Computation:**
+  ```
+  rent = 10 × 0.001 × 7.1875 = 0.071875
+  ```
+- **Expected result (fixed-point ×10,000):** `718` (truncated from 718.75)
+- **Spec reference:** §6 — Replication Rent
+
+### CONTENT-03: Rent convergence — normal (≤10× divergence)
+
+- **Description:** Rent price locking converges toward current market rate at 20% per cycle using `effective = locked + (current - locked) × min(1, cycles_elapsed / 5)`.
+- **Input (fixed-point ×10,000):**
+  - Locked multiplier: 10000 (1.0)
+  - Current multiplier: 500000 (50.0)
+  - Divergence: 50× (≤10×? No — but per the spec the 10× threshold triggers acceleration. Let's test normal convergence first with a ≤10× case.)
+- **Revised input for normal convergence:**
+  - Locked multiplier: 10000 (1.0)
+  - Current multiplier: 50000 (5.0) — divergence = 5× (≤10×, normal rate)
+- **Computation:**
+  ```
+  Cycle 1: factor = min(10000, 1 × 10000 / 5) = 2000
+           effective = 10000 + (50000 - 10000) × 2000 / 10000
+                     = 10000 + 40000 × 2000 / 10000
+                     = 10000 + 8000 = 18000
+  
+  Cycle 3: factor = min(10000, 3 × 10000 / 5) = 6000
+           effective = 10000 + 40000 × 6000 / 10000
+                     = 10000 + 24000 = 34000
+  
+  Cycle 5: factor = min(10000, 5 × 10000 / 5) = 10000
+           effective = 10000 + 40000 × 10000 / 10000
+                     = 10000 + 40000 = 50000 (fully converged)
+  ```
+- **Expected results:**
+  - Cycle 1: `18000` (1.8)
+  - Cycle 3: `34000` (3.4)
+  - Cycle 5: `50000` (5.0, fully converged)
+- **Spec reference:** §6 — Rent price locking with convergence
+
+### CONTENT-04: Rent convergence with acceleration (>10× divergence)
+
+- **Description:** When current multiplier exceeds locked by more than 10×, convergence accelerates to 30% per cycle (`cycles_elapsed × 3 / 10`).
+- **Input (fixed-point ×10,000):**
+  - Locked multiplier: 10000 (1.0)
+  - Current multiplier: 1000000 (100.0) — divergence = 100× (>10×, accelerated)
+- **Computation:**
+  ```
+  Cycle 1: factor = min(10000, 1 × 3 × 10000 / 10) = min(10000, 3000) = 3000
+           effective = 10000 + (1000000 - 10000) × 3000 / 10000
+                     = 10000 + 990000 × 3000 / 10000
+                     = 10000 + 297000 = 307000
+  
+  Cycle 4: factor = min(10000, 4 × 3 × 10000 / 10) = min(10000, 12000) = 10000 (capped)
+           effective = 10000 + 990000 × 10000 / 10000
+                     = 10000 + 990000 = 1000000 (fully converged)
+  ```
+- **Expected results:**
+  - Cycle 1: `307000` (30.7)
+  - Cycle 4: `1000000` (100.0, fully converged at cycle 4)
+- **Spec reference:** §6 — Rent price locking with convergence
+
+### CONTENT-05: Storage capacity limit
+
+- **Description:** Maximum active replicated content scales with reputation using `max_active_replicated = base_allowance × (reputation / 0.2)^2`, where `base_allowance = 10 MiB`.
+- **Input → Expected output:**
+  - Rep 0.2: `10 × (0.2 / 0.2)^2 = 10 × 1 = 10 MiB`
+  - Rep 0.3: `10 × (0.3 / 0.2)^2 = 10 × 1.5^2 = 10 × 2.25 = 22.5 MiB`
+  - Rep 0.5: `10 × (0.5 / 0.2)^2 = 10 × 2.5^2 = 10 × 6.25 = 62.5 MiB`
+  - Rep 0.8: `10 × (0.8 / 0.2)^2 = 10 × 4^2 = 10 × 16 = 160 MiB`
+  - Rep 1.0: `10 × (1.0 / 0.2)^2 = 10 × 5^2 = 10 × 25 = 250 MiB`
+- **Spec reference:** §6 — Reputation-based storage limits
+
+### CONTENT-06: Grace period escalation
+
+- **Description:** Repeated missed rent payments within 90 days trigger progressively shorter grace periods.
+- **Input:** Same content, three missed payments within 90 days
+- **Expected:**
+  - 1st missed payment: 7-day grace period
+  - 2nd missed payment within 90 days: 3-day grace period
+  - 3rd missed payment within 90 days: 0 days (immediate GC eligibility)
+- **Spec reference:** §6 — "If the uploader cannot pay rent"
+
+### CONTENT-07: Provenance reward split
+
+- **Description:** When `origin_share_id` is set, adoption rewards are split 70/30 between proposer and original host.
+- **Input:**
+  - Proposal receives 10 ADOPT messages → +0.05 total (capped)
+  - `origin_share_id` is set
+  - Original host reputation ≥ 0.3
+- **Expected:**
+  - Proposer (author): 70% × 0.05 = 0.035 (fixed-point: 350)
+  - Original host: 30% × 0.05 = 0.015 (fixed-point: 150)
+- **Input (host below 0.3):**
+  - Original host reputation < 0.3
+- **Expected:**
+  - Original host: capped at 0.002 per proposal (fixed-point: 20)
+  - Proposer: receives remainder = 0.05 - 0.002 = 0.048 (fixed-point: 480)
+- **Spec reference:** §6 — Content Provenance
+
+### CONTENT-08: Provenance + storage provider split (both apply)
+
+- **Description:** When both provenance and storage provider splits apply, storage providers receive their 30% first, then provenance splits the author's 70%.
+- **Input:**
+  - Proposal receives 10 ADOPT messages → +0.05 total
+  - `origin_share_id` is set, host reputation ≥ 0.3
+- **Computation:**
+  ```
+  Storage providers: 30% × 0.05 = 0.015 (fixed-point: 150)
+  Author side: 70% × 0.05 = 0.035 (fixed-point: 350)
+  
+  With provenance on author side:
+    Proposer: 70% × 0.035 = 0.0245 (fixed-point: 245)
+    Original host: 30% × 0.035 = 0.0105 (fixed-point: 105)
+  
+  Total: 0.0245 + 0.0105 + 0.015 = 0.05 ✓
+  ```
+- **Expected:**
+  - Storage providers: 150 (0.015)
+  - Proposer: 245 (0.0245)
+  - Original host: 105 (0.0105)
+- **Spec reference:** §6 — Content Provenance, Content Lifecycle
+
+### CONTENT-09: FLAG stake costs
+
+- **Description:** Flagging content costs reputation as a stake, with additional penalties for false severe flags.
+- **Input → Expected costs:**
+  - `severity: dispute` flag: -0.005 (fixed-point: -50)
+  - `severity: illegal` flag: -0.02 (fixed-point: -200)
+  - False `severity: illegal` flag (rejected by governance): stake forfeited (-0.02) + additional penalty (-0.05) = total -0.07 (fixed-point: -700)
+- **Spec reference:** §6 — Content Flagging
+
+### CONTENT-10: Rent payment timing
+
+- **Description:** RENT_PAYMENT must be broadcast within the first 7 days of the billing cycle.
+- **Input scenarios:**
+  - RENT_PAYMENT broadcast on day 3 of billing cycle → **accepted**
+  - RENT_PAYMENT broadcast on day 7 of billing cycle → **accepted**
+  - RENT_PAYMENT broadcast on day 8 of billing cycle → **treated as missed** (grace period triggers)
+  - Duplicate RENT_PAYMENT for same `(content_hash, billing_cycle)` → **first-seen wins**, subsequent rejected
+- **Spec reference:** §6 — Rent Payments
+
+### CONTENT-11: CONTENT_WITHDRAW rules
+
+- **Description:** Content withdrawal requires 24-hour delay and cannot conflict with active proposals.
+- **Input scenarios:**
+  - `effective_after` = timestamp + 24h → **accepted**
+  - `effective_after` = timestamp + 12h → **MUST reject** (< 24h from message timestamp)
+  - Content with active proposal (voting_deadline not passed) → **MUST reject** withdrawal
+  - Content with concluded proposal (voting_deadline passed) → **accepted**
+- **Spec reference:** §6 — Content Withdrawal
+
+### CONTENT-12: Illegal flag deletion threshold
+
+- **Description:** Immediate shard deletion requires specific multi-source thresholds.
+- **Input scenarios:**
+  - 5 flags from 3 distinct ASNs → **immediate shard deletion** ✓
+  - 2 hash-match flags from different databases → **immediate shard deletion** ✓
+  - 4 flags from 3 ASNs → **NOT enough** (need ≥5 flags)
+  - 5 flags from 2 ASNs → **NOT enough** (need ≥3 ASNs)
+  - 1 hash-match flag from 1 database → **stop serving, but NOT shard deletion** (need ≥2 databases)
+- **Spec reference:** §6 — Content Flagging, Illegal response
+
+---
+
+## 16. Capability Ramp (§9)
+
+### CAP-01: Capability thresholds by reputation
+
+- **Description:** Fresh identities have limited capabilities. Higher reputation unlocks higher-impact actions.
+- **Input → Expected behavior:**
+
+  **At rep 0.2 (starting):**
+  - Store shards → ✓
+  - Earn rent → ✓
+  - Sync → ✓
+  - Browse → ✓
+  - Adopt → ✓
+  - Propose → **REJECT**
+  - Vote → **REJECT**
+  - Flag (dispute) → **REJECT**
+
+  **At rep 0.3:**
+  - Propose (small) → ✓
+  - Vote → ✓
+  - Flag (dispute) → ✓
+  - Replicate content → ✓
+  - Flag (illegal) → **REJECT**
+
+  **At rep 0.5:**
+  - Flag (illegal) → ✓
+  - Full proposal size → ✓
+
+- **Spec reference:** §9 — Capability Ramp
+
+---
+
+## 17. Votes (§8)
+
+### VOTE-01: Minimum reputation to vote
+
+- **Description:** Nodes MUST have reputation ≥ 0.3 to submit votes.
+- **Input scenarios:**
+  - Node at rep 2900 (0.29) submits VOTE → **MUST reject**
+  - Node at rep 3000 (0.30) submits VOTE → **accepted**
+- **Spec reference:** §8 — Vote Rules
+
+### VOTE-02: Close-margin confirmation period
+
+- **Description:** When a proposal's endorsement ratio falls within ±0.02 of the threshold at voting_deadline, a 7-day confirmation period is required.
+- **Input scenarios:**
+  - Proposal with endorsement ratio 6600 (0.66), threshold 6700 (0.67):
+    - Within ±0.02 range (0.65–0.69) → **MUST enter 7-day confirmation period**
+  - Proposal with endorsement ratio 7000 (0.70), threshold 6700 (0.67):
+    - Outside ±0.02 range → **no confirmation period needed**, ratification determined immediately
+- **Spec reference:** §8 — Close-margin confirmation
+
+---
+
+## 18. Storage Validators (§6)
+
+### VALIDATOR-01: Rent split between providers and validators
+
+- **Description:** Storage rent is split 80/20 between providers and validators.
+- **Input (fixed-point ×10,000):**
+  - Monthly rent: 1000 (0.1)
+- **Expected:**
+  - Provider share (80%): 800 (0.08)
+  - Validator share (20%): 200 (0.02)
+- **Spec reference:** §6 — Storage Provider and Validator Revenue
+
+### VALIDATOR-02: Pro-rated rent for insufficient challenges
+
+- **Description:** Providers who pass fewer than the minimum 10 challenges receive pro-rated rent.
+- **Input:**
+  - Monthly rent: 1000 (0.1)
+  - Provider full share: 800 (0.08)
+  - Challenges passed: 5 of 10 minimum
+- **Expected:**
+  - Provider receives 50% of share: 400 (0.04)
+- **Spec reference:** §6 — Minimum challenge requirements
+
+### VALIDATOR-03: Self-validation rejected
+
+- **Description:** CHALLENGE_RESULT messages where the challenger and challenged are the same identity MUST be rejected.
+- **Input:**
+  - CHALLENGE_RESULT with challenger identity = challenged identity
+- **Expected:** MUST reject.
+- **Spec reference:** §6 — "Validators MUST NOT validate their own shards"
+
+### VALIDATOR-04: Validator earnings cap
+
+- **Description:** Each validator's earnings are capped at 30 challenges per content per billing cycle.
+- **Input:**
+  - Validator issues 50 challenges for one content in one billing cycle
+- **Expected:**
+  - First 30 challenges earn validator share
+  - Remaining 20 challenges verify storage integrity but do NOT earn additional validator share
+- **Spec reference:** §6 — Validator earnings cap
+
+---
+
+## 19. Comment Rate Limits (§7)
+
+### COMMENT-01: Rate scaling with reputation
+
+- **Description:** Comment rate limits scale with reputation. Per-proposal limits apply uniformly.
+- **Input → Expected limits:**
+  - Rep 0.3: **1 comment per hour**
+  - Rep 0.5: **5 comments per hour**
+  - Rep 0.8+: **10 comments per hour**
+  - Per-proposal: **3 per identity per rolling 24-hour window** (all reputation levels)
+- **Spec reference:** §7 — COMMENT
