@@ -74,11 +74,21 @@ TBD — candidates:
 - DIDs (interoperable, but complex)
 - Something simpler that can bridge to DIDs later
 
+## Anti-Fragmentation
+
+- Nodes periodically reach out to random peers outside their usual neighborhood
+- Hybrid push/pull gossip — nodes actively pull ("what have you seen since X?"), not just passively receive
+- Any node that can reach any peer can eventually reach the whole network
+
+## Protocol Versioning
+
+Every message carries a protocol version. Versions have baked-in EOLs. See [evolution.md](evolution.md) for the full lifecycle.
+
+Nodes must upgrade or they get dropped. Upgrading should be trivial — the proposal contains the new spec.
+
 ## Open Questions
 
-- How do nodes find each other initially? (Bootstrap nodes? DHT? DNS seeds?)
-- What prevents sybil attacks? (Reputation cost of entry? Proof of storage? Vouching?)
 - How large can proposals be? (Inline for small, sharded for large?)
 - Conflict resolution for competing proposals addressing the same request?
-- Offline nodes — how do they catch up on proposals and votes?
 - Garbage collection — when do rejected/expired proposals get pruned?
+- v0 specification — what's the minimal viable protocol that can propose changes to itself?
