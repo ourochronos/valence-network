@@ -94,6 +94,10 @@ These aren't built in from day one. They're proposed and ratified through the pr
 
 ## Trust Model
 
+Trust is derived, not stored. The protocol defines no trust scores beyond node reputation — everything else is computed locally from public signals.
+
+**Node trust** = reputation, earned through participation:
+
 ```
 Node A sees:
   - Direct experience with Node B (proposals, votes, storage)
@@ -102,7 +106,9 @@ Node A sees:
   → A computes local reputation score for B
 ```
 
-No global reputation. No central authority. Each node's view is its own, informed by the network.
+**Content trust** is not prescribed by the protocol. The signals are public — vote margins, voter reputation, adoption count/success, supersession depth, source diversity — but how a node combines them is its own decision. This is deliberate: a prescribed formula becomes a gaming target. Locally computed trust from public signals means there's no single function to exploit.
+
+No global reputation. No central authority. No canonical content confidence score. Each node's view is its own, informed by the network.
 
 ## What This Replaces
 
