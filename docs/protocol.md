@@ -31,6 +31,7 @@
 | `REPLICATE_REQUEST` | Request network-stored erasure-coded replication | §6 |
 | `REPLICATE_ACCEPT` | Signal willingness to store shards | §6 |
 | `SHARD_ASSIGNMENT` | Confirm shard distribution to providers | §6 |
+| `SHARD_RECEIVED` | Provider confirms shard receipt | §6 |
 | `RENT_PAYMENT` | Broadcast rent payment for a billing cycle | §6 |
 | `CONTENT_REQUEST` | Request content download (direct stream) | §6 |
 | `CONTENT_RESPONSE` | Return content data (direct stream) | §6 |

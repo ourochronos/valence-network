@@ -33,7 +33,7 @@ Documents, skills, configurations, code.
 | Claim verified true | +0.001 | Confirmation |
 | Claim found false (by you) | +0.005 | Contradiction reward |
 | First to find contradiction | +0.01 | First-finder bonus |
-| Storage challenge passed | +0.001 per challenge | Adjacency proof |
+| Storage rent earned | Market-priced (§6) | Transferred from uploaders via challenges (80% provider / 20% validator) |
 | Uptime | +0.001/day | Caps at 30 days |
 
 Penalties: false claims (−0.003 each), failed storage (−0.01), collusion (−0.05), inactivity (−0.02/month after 30 days).
