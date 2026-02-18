@@ -806,3 +806,32 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   3. DID_LINK(root=C, child=B) MUST be rejected — revoked keys cannot be re-linked to any identity.
   4. B operates as an independent root identity only.
 - **Spec reference:** §1 — "After revocation"
+
+### LINK-13: Child KEY_ROTATE blocks hostile DID_LINK
+
+- **Description:** When a child key rotates, the new key is implicitly linked — an attacker cannot claim it via DID_LINK.
+- **Input:**
+  1. Identity: root=A, child=B
+  2. B performs KEY_ROTATE to B' (new keypair, dual-signed by B and B')
+  3. Attacker E submits DID_LINK: root=E, child=B'
+- **Expected:**
+  1. KEY_ROTATE accepted — B' inherits B's authorized status under root A.
+  2. B' is treated as linked to A (no explicit DID_LINK required).
+  3. DID_LINK(root=E, child=B') MUST be rejected — B' is already an authorized key via KEY_ROTATE chain.
+  4. Messages signed by B' are attributed to identity A.
+- **Spec reference:** §1 — "KEY_ROTATE Interaction": "A key that became an authorized key via KEY_ROTATE of an existing child MUST be treated as linked"
+
+### LINK-14: WITHDRAW by sibling key in same identity
+
+- **Description:** Any key in an identity can withdraw a proposal authored by another key in the same identity.
+- **Input:**
+  1. Identity: root=A, child=B, child=C
+  2. B submits PROPOSE (from=B, proposal_id=P1)
+  3. C submits WITHDRAW (from=C, proposal_id=P1)
+  4. Unrelated node D submits WITHDRAW (from=D, proposal_id=P1)
+- **Expected:**
+  1. PROPOSE accepted — B is authorized to propose as identity A.
+  2. WITHDRAW from C accepted — C is in the same identity as B (both authorized under root A).
+  3. Votes for P1 stop being counted after C's WITHDRAW.
+  4. WITHDRAW from D rejected — D is not in identity A.
+- **Spec reference:** §6 — WITHDRAW: "For proposals authored by an authorized key (§1 Identity Linking), any key in the same identity (including root) MAY withdraw."
