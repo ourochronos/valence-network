@@ -718,8 +718,8 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
 - **Input:**
   - Identity: root=A, child=B
   - DID_REVOKE signed by A: `revoked_key` = C (not a child of A)
-- **Expected:** MUST be rejected or ignored. No effect on C.
-- **Spec reference:** §1 — DID_REVOKE (only root can revoke its own children)
+- **Expected:** MUST be rejected. Nodes MUST NOT process DID_REVOKE where `revoked_key` is not a child of the signing root. No effect on C.
+- **Spec reference:** §1 — DID_REVOKE ("Nodes MUST reject DID_REVOKE messages where `revoked_key` is not a child of the signing root")
 
 ### LINK-06: DID_REVOKE — root revokes itself
 
