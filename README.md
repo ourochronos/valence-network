@@ -47,7 +47,7 @@ Penalties: false claims (−0.003 each), failed storage (−0.01), collusion (�
 
 ## Status
 
-v0 specification complete (6 rounds of adversarial review). Conformance test suite and Rust reference implementation pending.
+v0 specification complete (7 rounds of adversarial review + 4 sync protocol reviews + final audit). Conformance test suite included. Rust reference implementation in progress. See [docs/audits/](docs/audits/) for the full review history.
 
 ## License
 

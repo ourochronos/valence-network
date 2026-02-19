@@ -1487,3 +1487,234 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   - Roots diverge significantly.
 - **Expected:** No partition event triggered. Divergence is expected for syncing nodes. Partition detection applies only between two "synced" nodes.
 - **Spec reference:** §5 — Sync Status
+
+---
+
+## 22. Key Rotation Edge Cases (§1)
+
+### SIG-03: KEY_ROTATE first-seen-wins rejection
+
+- **Description:** A second KEY_ROTATE for the same `old_key` with a different `new_key` MUST be rejected (first-seen wins).
+- **Input:**
+  1. KEY_ROTATE: `old_key` = Keypair A, `new_key` = Keypair B (valid dual signatures). Accepted.
+  2. KEY_ROTATE: `old_key` = Keypair A, `new_key` = Keypair C (valid dual signatures from A and C).
+- **Expected:** Second KEY_ROTATE MUST be rejected. Keypair A has already been rotated to Keypair B. The node MUST NOT update the rotation target.
+- **Spec reference:** §1 — "Subsequent KEY_ROTATE messages with the same `old_key` but a different `new_key` MUST be rejected"
+
+### SIG-04: KEY_CONFLICT generation on conflicting rotations
+
+- **Description:** When a node observes two KEY_ROTATE messages for the same `old_key` with different `new_key` values, it MUST broadcast a KEY_CONFLICT and apply suspension.
+- **Input:**
+  - KEY_ROTATE message 1: `old_key` = A, `new_key` = B (valid)
+  - KEY_ROTATE message 2: `old_key` = A, `new_key` = C (valid, arrives later — e.g., from partition heal)
+- **Expected:**
+  1. Node MUST broadcast a KEY_CONFLICT message:
+     ```json
+     {
+       "type": "KEY_CONFLICT",
+       "payload": {
+         "old_key": "<A public key>",
+         "rotate_1": "<message_id of first KEY_ROTATE>",
+         "rotate_2": "<message_id of second KEY_ROTATE>"
+       }
+     }
+     ```
+  2. Both `new_key` B and `new_key` C MUST be suspended:
+     - Reputation frozen at floor: 1000 (0.1)
+     - Voting weight reduced to 10% of normal
+  3. Suspension persists until resolved by governance proposal.
+- **Spec reference:** §1 — KEY_CONFLICT
+
+### SIG-05: KEY_ROTATE grace period — old key accepted within 1 hour
+
+- **Description:** After KEY_ROTATE, messages from the old key are accepted during the 1-hour grace period (measured from the KEY_ROTATE message timestamp).
+- **Input:**
+  - KEY_ROTATE message: `old_key` = A, `new_key` = B, `timestamp` = T
+  - Message from A with `timestamp` = T + 3,599,999 ms (just under 1 hour)
+- **Expected:** Message from A MUST be accepted (within grace period).
+- **Spec reference:** §1 — "messages signed by the old key MUST be rejected after `KEY_ROTATE.timestamp + 3,600,000 ms`"
+
+### SIG-06: KEY_ROTATE grace period — old key rejected after 1 hour
+
+- **Description:** After KEY_ROTATE, messages from the old key MUST be rejected after the 1-hour grace period.
+- **Input:**
+  - KEY_ROTATE message: `old_key` = A, `new_key` = B, `timestamp` = T
+  - Message from A with `timestamp` = T + 3,600,001 ms (just over 1 hour)
+- **Expected:** Message from A MUST be rejected (grace period expired).
+- **Spec reference:** §1 — "messages signed by the old key MUST be rejected after `KEY_ROTATE.timestamp + 3,600,000 ms`"
+
+### SIG-07: KEY_CONFLICT suspension effects
+
+- **Description:** When KEY_CONFLICT is in effect, both conflicting keys have reputation frozen and voting weight reduced.
+- **Input:**
+  - KEY_CONFLICT active for `old_key` = A, conflicting `new_key` values B and C.
+  - B has pre-conflict reputation 7000 (0.7). C has pre-conflict reputation 5000 (0.5).
+  - B casts a VOTE with normal weight 7000.
+- **Expected:**
+  - B's reputation is frozen at 1000 (0.1 floor) — no gains or losses applied.
+  - B's effective voting weight = 1000 × 10% = 100 (0.01 effective).
+  - C's reputation similarly frozen at 1000.
+  - Neither B nor C can earn reputation gains until conflict resolution.
+- **Spec reference:** §1 — "reputation frozen at floor (0.1), voting weight reduced to 10% of normal"
+
+---
+
+## 23. Authentication (§3)
+
+### AUTH-01: AUTH_RESPONSE replay detection — wrong initiator key
+
+- **Description:** An AUTH_RESPONSE that binds the wrong initiator key MUST be rejected, preventing replay attacks.
+- **Input:**
+  - Node X sends AUTH_CHALLENGE to Node Y, including X's public key.
+  - Y constructs AUTH_RESPONSE signing: `challenge_nonce || X_public_key`.
+  - Attacker Z replays Y's AUTH_RESPONSE to a different node W.
+- **Expected:** W MUST reject the AUTH_RESPONSE because the bound initiator key (X) does not match W's own key. The signature is valid but the binding is wrong.
+- **Spec reference:** §3 — "Binding the initiator's key into the signed response prevents replay attacks"
+
+---
+
+## 24. Close-Margin Confirmation (§8)
+
+### VOTE-03: Close-margin confirmation — full deterministic test vector
+
+- **Description:** A proposal whose endorsement ratio falls within ±0.02 of the threshold at voting deadline MUST enter a 7-day confirmation period.
+- **Input (fixed-point ×10,000):**
+  - Threshold: 6700 (0.67)
+  - Close-margin range: 6500–6900 (0.65–0.69)
+  - Voters (all synced):
+    - Voter 1: rep weight 5000, stance = endorse
+    - Voter 2: rep weight 3000, stance = endorse
+    - Voter 3: rep weight 2000, stance = endorse
+    - Voter 4: rep weight 4000, stance = reject
+    - Voter 5: rep weight 1000, stance = reject
+  - Total voter rep: 15000 (quorum assumed met)
+- **Computation:**
+  ```
+  weighted_endorse = 5000 + 3000 + 2000 = 10000
+  weighted_reject = 4000 + 1000 = 5000
+  endorsement_ratio = 10000 × 10000 / (10000 + 5000)
+                    = 100000000 / 15000
+                    = 6666  (truncated)
+  ```
+  - 6666 is within range [6500, 6900] → close margin detected.
+- **Expected:**
+  - Proposal MUST NOT be ratified or rejected immediately.
+  - Proposal enters 7-day confirmation period.
+  - During the confirmation period, new votes are accepted and the ratio is recalculated.
+  - At the end of the 7-day period, the final ratio determines the outcome.
+- **Spec reference:** §8 — Close-margin confirmation
+
+### VOTE-04: Close-margin — outside range, no confirmation needed
+
+- **Description:** A proposal whose endorsement ratio is outside the ±0.02 range is decided immediately.
+- **Input (fixed-point ×10,000):**
+  - Same voters as VOTE-03 except Voter 5 switches to endorse.
+  - weighted_endorse = 5000 + 3000 + 2000 + 1000 = 11000
+  - weighted_reject = 4000
+  - endorsement_ratio = 11000 × 10000 / 15000 = 7333
+  - 7333 > 6900 → outside close-margin range.
+- **Expected:** Proposal is ratified immediately (ratio 0.7333 ≥ 0.67 threshold, outside ±0.02 band).
+- **Spec reference:** §8 — Close-margin confirmation
+
+---
+
+## 25. Identity Linking Edge Cases (§1)
+
+### LINK-15: DID_LINK first-seen-wins — same child to different root rejected
+
+- **Description:** A second DID_LINK claiming the same child key for a different root MUST be rejected.
+- **Input:**
+  1. DID_LINK: root=A, child=C (valid, accepted — first seen).
+  2. DID_LINK: root=B, child=C (valid signatures from B and C).
+- **Expected:** Second DID_LINK MUST be rejected. Child C is already linked to root A. This is a MUST regardless of whether the child provided a valid signature for the second link.
+- **Note:** This differs from LINK-02 only in that it uses a third keypair (C) as the child. The rule is: first valid DID_LINK for a given child key wins unconditionally.
+- **Spec reference:** §1 — "First valid DID_LINK for a given child key wins"
+
+### LINK-16: Identity gain dampening — 3 keys
+
+- **Description:** Gain dampening with 3 authorized keys uses `raw_gain / 3^0.75`.
+- **Input (fixed-point ×10,000):**
+  - raw_gain = 100 (represents 0.01)
+  - authorized_key_count = 3
+- **Computation:**
+  ```
+  dampening_factor = 3^0.75 = 2.2795
+  fixed_point_factor = 22795
+  effective_gain = 100 × 10000 / 22795 = 43 (truncated)
+  ```
+- **Expected result (3 keys):** `43` (represents 0.0043)
+- **Cross-check with REP-05 (2 keys):** `59` (represents 0.0059) — 3 keys gives less gain than 2 keys ✓
+- **Spec reference:** §1 — Gain dampening: `effective_gain = raw_gain / authorized_key_count^0.75`
+
+### LINK-17: Unlinked key 60-day voting cooldown
+
+- **Description:** A key that was revoked from an identity and re-registers independently faces a 60-day voting cooldown from the DID_REVOKE timestamp.
+- **Input:**
+  1. Identity: root=A, child=B.
+  2. DID_REVOKE at timestamp T: revokes B.
+  3. B re-registers as independent node.
+  4. B attempts to VOTE at timestamp T + 59 days (< 60 days).
+  5. B attempts to VOTE at timestamp T + 61 days (> 60 days).
+- **Expected:**
+  - Vote at T + 59 days: MUST be rejected (cooldown active).
+  - Vote at T + 61 days: accepted (cooldown expired, assuming rep ≥ 0.3).
+- **Spec reference:** §1 — "Re-registered keys that were previously part of an identity face a 60-day voting cooldown"
+
+---
+
+## 26. Sync Edge Cases (§5)
+
+### SYNC-21: Sync peer selection — reject syncing/degraded peers
+
+- **Description:** Nodes with `sync_status` of `"syncing"` or `"degraded"` MUST NOT be selected as sync peers.
+- **Input:**
+  - Available peers: P1 (synced), P2 (syncing), P3 (synced), P4 (degraded), P5 (synced), P6 (synced), P7 (synced)
+  - All from ≥3 distinct ASNs.
+- **Expected:**
+  - Eligible sync peers: P1, P3, P5, P6, P7 (5 peers, all synced).
+  - P2 (syncing) and P4 (degraded) MUST NOT be selected.
+  - If only 4 synced peers are available from ≥3 ASNs, the node MUST NOT proceed with sync (insufficient peer count).
+- **Spec reference:** §5 — "Nodes with status `syncing` or `degraded` MUST NOT be selected as sync peers"
+
+### SYNC-22: Mid-sync phase 1 stale check boundary
+
+- **Description:** If more than 1 hour has elapsed since phase 1 completed, phase 1 MUST be re-run. Exactly 1 hour is the boundary.
+- **Input scenarios:**
+  - Phase 1 completed at T. Current time = T + 3,540,000 ms (59 minutes):
+    - **Expected:** Phase 1 is still fresh. Resume later phases normally.
+  - Phase 1 completed at T. Current time = T + 3,660,000 ms (61 minutes):
+    - **Expected:** Phase 1 is stale. MUST re-run phase 1 before resuming later phases.
+  - Phase 1 completed at T. Current time = T + 3,600,000 ms (exactly 60 minutes):
+    - **Expected:** Boundary case — at exactly 1 hour, phase 1 is still fresh (the check is "> 1 hour", not "≥ 1 hour").
+- **Spec reference:** §5 — "If more than 1 hour has elapsed since phase 1 completed, the node MUST re-run phase 1"
+
+### SYNC-23: Gossip buffer phase classification — full mapping
+
+- **Description:** Every message type is classified into exactly one sync phase for gossip buffer purposes.
+- **Expected mapping:**
+
+  | Message Type | Phase | Buffer Priority |
+  |---|---|---|
+  | `DID_LINK` | 1 (Identity) | Low (evicted first) |
+  | `DID_REVOKE` | 1 (Identity) | High (evicted last) |
+  | `KEY_ROTATE` | 1 (Identity) | Medium |
+  | `REPUTATION_GOSSIP` | 2 (Reputation) | Equal (oldest first) |
+  | `PROPOSE` | 3 (Proposals & Votes) | Medium |
+  | `VOTE` | 3 (Proposals & Votes) | High (evicted last) |
+  | `COMMENT` | 3 (Proposals & Votes) | Low (evicted first) |
+  | `SHARE` | 4 (Content Metadata) | Equal (oldest first) |
+  | `FLAG` | 4 (Content Metadata) | Equal (oldest first) |
+  | `CONTENT_WITHDRAW` | 4 (Content Metadata) | Equal (oldest first) |
+  | `RENT_PAYMENT` | 4 (Content Metadata) | Equal (oldest first) |
+  | `REPLICATE_REQUEST` | 5 (Storage State) | Equal (oldest first) |
+  | `REPLICATE_ACCEPT` | 5 (Storage State) | Equal (oldest first) |
+  | `SHARD_ASSIGNMENT` | 5 (Storage State) | Equal (oldest first) |
+  | `SHARD_RECEIVED` | 5 (Storage State) | Equal (oldest first) |
+
+- **Verification:** For each message type above, if the node is currently syncing phase 2 and receives the message via gossip:
+  - Phase 1 types (DID_LINK, DID_REVOKE, KEY_ROTATE): **applied immediately** (phase 1 already committed).
+  - Phase 2 type (REPUTATION_GOSSIP): **buffered** in phase 2 buffer.
+  - Phase 3 types (PROPOSE, VOTE, COMMENT): **buffered** in phase 3 buffer.
+  - Phase 4 types (SHARE, FLAG, etc.): **buffered** in phase 4 buffer.
+  - Phase 5 types (REPLICATE_REQUEST, etc.): **buffered** in phase 5 buffer (or discarded if node has no `store` capability).
+- **Spec reference:** §5 — Gossip buffering during sync, message type → phase mapping table
