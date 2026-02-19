@@ -178,7 +178,37 @@ Discrete event values unchanged:
 
 ---
 
-## 10. Content Metadata and Search
+## 10. Consumer-Chosen Erasure Coding
+
+**Section:** §6 (Content)
+
+**Rationale:** v0 hardcodes 5-of-8 erasure coding. Consumers should choose redundancy based on what their content is worth.
+
+**Change:** Consumer specifies in REPLICATE_REQUEST:
+```json
+{
+  "parts": 8,           // total shards (N), range: 2–32
+  "buckets": 5,         // shards needed to reconstruct (K), range: 1–(parts-1)
+  "provider_tier": "reliable"
+}
+```
+
+- **Parts** (N): total shards created. Max 32 (Reed-Solomon GF(2^8) allows 255, but 32 is plenty redundant and keeps coordination overhead sane).
+- **Buckets** (K): minimum shards needed to reconstruct. Must be < parts.
+- **Provider tier**: from change #7.
+
+Cost = parts × tier_multiplier × shard_size × scarcity_rate. More parts and higher tier = more expensive.
+
+Examples:
+- Don't care much: 4 parts, 3 buckets, casual — cheap
+- Default: 8 parts, 5 buckets, reliable — balanced
+- Critical: 16 parts, 6 buckets, dedicated — survive 10 provider failures on high-quality storage
+
+Cap of 32 can be relaxed via governance proposal if the network grows large enough.
+
+---
+
+## 11. Content Metadata and Search
 
 **Section:** §7 (Proposals) — PROPOSE schema, new subsection on search conventions
 
@@ -217,6 +247,7 @@ Both fields optional. Nodes index PROPOSE metadata they receive via gossip. Sear
 ---
 
 ## Changes NOT included (deferred)
+- **Mutable content (CONTENT_REF)** — named pointers, version chains, encrypted volume sync. Too complex for MVP. Protocol stays immutable content-addressed blobs. Publish new content + supersede old.
 - **Bandwidth economy** — per-peer metering, transit compensation. Replaced by QoS-by-rep.
 - **Routing incentives** — proof-of-relay. Open research problem.
 - **PRODUCT.md parity with spec** — multiple values diverge (starting rep 0.5 vs 0.2, capability thresholds, rep subcategories). Needs systematic audit.
