@@ -178,9 +178,45 @@ Discrete event values unchanged:
 
 ---
 
-## Changes NOT included (deferred)
+## 10. Content Metadata and Search
 
-- **Content tagging / search** — `tags` field in PROPOSE, search index. Pinned for later discussion.
+**Section:** §7 (Proposals) — PROPOSE schema, new subsection on search conventions
+
+**Rationale:** The protocol treats content as opaque bytes. Discovery requires metadata. The minimum viable approach: add structured fields to PROPOSE, let nodes build local search indexes, defer richer schemas to network governance.
+
+**Schema additions to PROPOSE payload:**
+```json
+{
+  "tags": ["string"],          // max 10 tags, max 64 chars each, lowercase
+  "description": "<string>"   // max 1 KiB, plain text or markdown
+}
+```
+
+Both fields optional. Nodes index PROPOSE metadata they receive via gossip. Search is local — you search your view of the network, weighted by proposer reputation.
+
+**Tag conventions (guidance, not enforced):**
+- Lowercase, hyphen-separated: `machine-learning`, `rust-crate`, `fine-tune`
+- Specificity over breadth: `llama3-8b` better than `ai`
+- Include content format when useful: `safetensors`, `csv`, `markdown`
+- Domain prefix for namespacing: `ml/llama3`, `lang/rust`, `data/benchmark`
+- Keep them discoverable — tags are the primary search surface
+
+**Description conventions (guidance, not enforced):**
+- First line: what it is (one sentence)
+- Then: why someone would want it, what it's compatible with, known limitations
+- Include version numbers, model names, dataset sizes — the concrete details that help people decide before fetching
+
+**What's explicitly NOT in v1:**
+- Canonical tag taxonomy (let conventions emerge through usage)
+- Mandatory fields beyond what's in PROPOSE today
+- Embeddings (any node can compute and publish as sidecar content — no mandated model)
+- Categories (can be proposed as metadata standards via governance later)
+
+**Future path:** Metadata standards are themselves proposable content. A standard like "ML Model Card" is a document that says "include these fields when publishing models." Nodes that adopt it index accordingly. Good standards get adopted through stigmergy. Bad ones fade. The protocol provides the floor; the network builds the ceiling.
+
+---
+
+## Changes NOT included (deferred)
 - **Bandwidth economy** — per-peer metering, transit compensation. Replaced by QoS-by-rep.
 - **Routing incentives** — proof-of-relay. Open research problem.
 - **PRODUCT.md parity with spec** — multiple values diverge (starting rep 0.5 vs 0.2, capability thresholds, rep subcategories). Needs systematic audit.
