@@ -1718,3 +1718,226 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   - Phase 4 types (SHARE, FLAG, etc.): **buffered** in phase 4 buffer.
   - Phase 5 types (REPLICATE_REQUEST, etc.): **buffered** in phase 5 buffer (or discarded if node has no `store` capability).
 - **Spec reference:** §5 — Gossip buffering during sync, message type → phase mapping table
+
+---
+
+## 27. Reputation Velocity Boundary (§9)
+
+### REP-07: Gain crossing the 0.2 boundary is split
+
+- **Description:** A reputation gain that crosses the 0.2 starting threshold is split: the portion below 0.2 is uncapped (no velocity limit), and the remainder above 0.2 is velocity-limited.
+- **Input:**
+  - Node reputation: `1900` (0.19)
+  - Daily earned: `0`
+  - Weekly earned: `0`
+  - Gain: `500` (0.05)
+  - Daily velocity cap: `200` (0.02)
+- **Computation:**
+  1. Distance to boundary: `2000 − 1900 = 100` (0.01) — applied uncapped.
+  2. Remainder: `500 − 100 = 400` (0.04) — subject to velocity limit.
+  3. Velocity-limited portion: `min(400, 200) = 200` (0.02, daily cap).
+  4. Total gain: `100 + 200 = 300` (0.03).
+  5. Final reputation: `1900 + 300 = 2200` (0.22).
+- **Expected result:**
+  - `overall`: `2200` (0.22)
+  - `daily_earned`: `200` (0.02) — only the above-boundary portion counts toward velocity
+- **Spec reference:** §9 — "Recovery below starting score is uncapped… Above 0.2, velocity limits apply normally"
+
+### REP-08: Gain fully below 0.2 is uncapped
+
+- **Description:** A reputation gain that stays entirely below the 0.2 boundary is not subject to velocity limits.
+- **Input:**
+  - Node reputation: `1200` (0.12)
+  - Gain: `500` (0.05)
+- **Computation:**
+  1. New reputation: `1200 + 500 = 1700` (0.17) — still below 2000 (0.2).
+  2. Entire gain is uncapped; no velocity tracking.
+- **Expected result:**
+  - `overall`: `1700` (0.17)
+  - `daily_earned`: `0` — no velocity tracking below 0.2
+- **Spec reference:** §9 — "Recovery below starting score is uncapped"
+
+---
+
+## 28. Rent Convergence Acceleration (§6)
+
+### CONTENT-13: Normal convergence at 3 cycles
+
+- **Description:** The effective rent multiplier converges toward the current market rate at 20% per cycle (full convergence at 5 cycles).
+- **Input:**
+  - Locked multiplier: `10000` (1.0)
+  - Current multiplier: `60000` (6.0)
+  - Cycles elapsed: `3`
+- **Computation:**
+  - Divergence ratio: `60000 / 10000 = 6.0` (≤ 10×, normal convergence)
+  - Factor: `min(1, 3/5)` = `3/5`
+  - Effective: `10000 + (60000 − 10000) × 3 / 5 = 10000 + 30000 = 40000`
+- **Expected result:** `40000` (4.0)
+- **Spec reference:** §6 — "effective_multiplier = locked + (current - locked) × min(1, cycles_elapsed / 5)"
+
+### CONTENT-14: Accelerated convergence (>10× divergence)
+
+- **Description:** When current exceeds locked by more than 10×, convergence accelerates to 30% per cycle (`cycles × 3/10`).
+- **Input:**
+  - Locked multiplier: `10000` (1.0)
+  - Current multiplier: `150000` (15.0)
+  - Cycles elapsed: `2`
+- **Computation:**
+  - Divergence ratio: `150000 / 10000 = 15.0` (> 10×, accelerated convergence)
+  - Factor: `min(1, 2 × 3 / 10)` = `min(1, 6/10)` = `6/10`
+  - Effective: `10000 + (150000 − 10000) × 6 / 10 = 10000 + 84000 = 94000`
+- **Expected result:** `94000` (9.4)
+- **Spec reference:** §6 — "When the current multiplier exceeds the locked multiplier by more than 10×, convergence accelerates to 30% per cycle (cycles_elapsed × 3 / 10)"
+
+---
+
+## 29. Partition Merge Rules (§12)
+
+### MERGE-01: Content union — active on either side survives
+
+- **Description:** On partition merge, content that is active on either side survives. Higher lifecycle states win: Replicated > GracePeriod > Hosted > Decayed.
+- **Input:**
+  - Partition A state: `Replicated` (locked_multiplier: `10000`, replication_timestamp: `1000`)
+  - Partition B state: `Decayed`
+- **Expected result:** `Replicated` (locked_multiplier: `10000`, replication_timestamp: `1000`)
+- **Additional case:**
+  - Partition A: `GracePeriod` (entered_at: `5000`, miss_count: `1`)
+  - Partition B: `Decayed`
+  - Expected: `GracePeriod` (entered_at: `5000`, miss_count: `1`)
+- **Spec reference:** §12 — "content that is active on either partition survives (union semantics)"
+
+### MERGE-02: Flag merge — union of flags from both partitions
+
+- **Description:** Flags from both partitions accumulate via union. When the same flagger appears in both partitions, the earliest timestamp is kept.
+- **Input:**
+  - Partition A flags: `[("alice", 100), ("bob", 200)]`
+  - Partition B flags: `[("bob", 150), ("carol", 300)]`
+- **Expected result:** `[("alice", 100), ("bob", 150), ("carol", 300)]` — 3 unique flaggers; bob's earliest timestamp (150) is kept.
+- **Spec reference:** §12 — "Flag state merges via union: flags from both partitions accumulate"
+
+### MERGE-03: Provenance merge — earliest SHARE timestamp wins
+
+- **Description:** Content provenance (`origin_share_id`) uses the earliest SHARE timestamp across both partitions.
+- **Input:**
+  - Partition A provenance: `("share_1", 2000)`
+  - Partition B provenance: `("share_2", 1000)`
+- **Expected result:** `("share_2", 1000)` — partition B has the earlier timestamp.
+- **Spec reference:** §12 — "Content provenance (origin_share_id) uses the earliest SHARE timestamp across both partitions"
+
+### MERGE-04: Votes by revoked keys invalidated retroactively
+
+- **Description:** On merge, votes cast by a key that was revoked (per DID_REVOKE timestamp) before the vote's timestamp are invalidated.
+- **Input:**
+  - Votes:
+    - `("vote1", "key_a", timestamp=5000)`
+    - `("vote2", "key_a", timestamp=3000)`
+    - `("vote3", "key_b", timestamp=6000)`
+  - Revocations: `("key_a", revoked_at=4000)`
+- **Expected invalidated votes:** `["vote1"]`
+  - vote1: key_a at ts=5000, revoked at 4000 → 5000 ≥ 4000 → **invalidated**
+  - vote2: key_a at ts=3000, revoked at 4000 → 3000 < 4000 → **valid** (cast before revocation)
+  - vote3: key_b not revoked → **valid**
+- **Spec reference:** §12 — "Votes cast by a key that was revoked (per the DID_REVOKE timestamp) before the vote's timestamp are invalidated on merge"
+
+---
+
+## 30. Tenure Decay (§11)
+
+### TENURE-01: Accelerating decay on consecutive skips
+
+- **Description:** Skipped cycles decay tenure non-linearly: 1st skip −1, 2nd consecutive −2, 3rd consecutive −3. Three consecutive skips from tenure 6 results in tenure 0 (1+2+3=6).
+- **Input:**
+  - Starting tenure: `6` (after 6 consecutive active cycles)
+  - Action: 3 consecutive skipped cycles (no `mark_active`)
+- **Expected after each skip:**
+  - After 1st skip: tenure = `5` (−1)
+  - After 2nd skip: tenure = `3` (−2)
+  - After 3rd skip: tenure = `0` (−3)
+- **Total decay:** `1 + 2 + 3 = 6` — complete reset from 6 to 0.
+- **Spec reference:** §11 — "the first skipped cycle decays tenure by 1, the second consecutive skip by 2, the third by 3"
+
+### TENURE-02: Skip counter resets on activity
+
+- **Description:** When a node becomes active after skipping, the consecutive skip counter resets to 0. A subsequent skip starts the decay sequence from −1 again.
+- **Input:**
+  1. Start with tenure `6` (6 active cycles).
+  2. Skip 1 cycle → tenure `5`, skip counter `1`.
+  3. Mark active, advance cycle → tenure `6`, skip counter `0`.
+  4. Skip 1 cycle → tenure `5` (−1, not −2).
+- **Expected:**
+  - After step 2: `consecutive_cycles = 5`, `consecutive_skips = 1`
+  - After step 3: `consecutive_cycles = 6`, `consecutive_skips = 0`
+  - After step 4: `consecutive_cycles = 5`, `consecutive_skips = 1`
+- **Spec reference:** §11 — Accelerating decay resets on activity
+
+---
+
+## 31. Content Withdrawal (§6)
+
+### WITHDRAW-01: CONTENT_WITHDRAW blocked by active proposal
+
+- **Description:** Content referenced by any active proposal (voting_deadline not yet passed) cannot be withdrawn.
+- **Input:**
+  1. Content hash `"abc"` is referenced by an active proposal.
+  2. Owner sends CONTENT_WITHDRAW for `"abc"` with `effective_after` ≥ 24 hours from timestamp.
+- **Expected:** CONTENT_WITHDRAW MUST be rejected with error (blocked by active proposal).
+- **Post-condition:** After the proposal concludes (removed from active set), the same CONTENT_WITHDRAW succeeds.
+- **Spec reference:** §6 — "Content referenced by ANY active proposal… cannot be withdrawn — the CONTENT_WITHDRAW MUST be rejected until all referencing proposals conclude"
+
+### WITHDRAW-02: PROPOSE rejected after CONTENT_WITHDRAW seen
+
+- **Description:** PROPOSE messages received after a CONTENT_WITHDRAW has been seen MUST be rejected for that content hash.
+- **Input:**
+  1. Owner sends CONTENT_WITHDRAW for content hash `"abc"` (no active proposals).
+  2. Another node sends PROPOSE referencing content hash `"abc"`.
+- **Expected:** The PROPOSE MUST be rejected (content is withdrawing).
+- **Spec reference:** §6 — "PROPOSE messages received after a CONTENT_WITHDRAW has been seen MUST be rejected for that content hash"
+
+---
+
+## 32. Collusion Detection (§11)
+
+### COLLUSION-01: Vote correlation triggers collusion flag
+
+- **Description:** A group of 3+ nodes with >95% vote correlation over 20+ proposals triggers a collusion flag with HIGH severity (−0.05 reputation penalty).
+- **Input:**
+  - 3 nodes: `"a"`, `"b"`, `"c"`
+  - 21 proposals: `"p0"` through `"p20"`
+  - All 3 nodes vote identically (endorse=true) on all 21 proposals (100% correlation > 95% threshold, 21 proposals ≥ 20 minimum)
+  - No identity group links between the nodes.
+- **Expected:** Collusion group detected containing `{"a", "b", "c"}`. Each node receives −0.05 penalty.
+- **Spec reference:** §11 — "Flag groups of 3+ nodes with >95% vote correlation over 20+ proposals"; §9 — "Collusion detected: -0.05"
+
+### COLLUSION-02: Identity group members exempt from collusion detection
+
+- **Description:** Keys within the same identity (§1 Identity Linking) are exempt from collusion detection.
+- **Input:**
+  - 3 nodes: `"a"`, `"b"`, `"c"` — all in the same identity group (same root).
+  - 21 proposals with 100% vote correlation (same setup as COLLUSION-01).
+  - Identity groups: `[{"a", "b", "c"}]`
+- **Expected:** No collusion groups detected (all pairs are exempt).
+- **Spec reference:** §1 — "Correlated activity between keys in the same identity is expected and MUST NOT trigger collusion penalties"; §11 — identity group exemption
+
+---
+
+## 33. Erasure Coding (§6)
+
+### ERASURE-01: Standard (5-of-8) recovery succeeds with exactly 5 shards
+
+- **Description:** Standard erasure coding (5 data shards, 3 parity shards = 8 total) can reconstruct the original artifact from any 5 of 8 shards.
+- **Input:**
+  - Artifact: `"Test data for reconstruction with missing shards"` (UTF-8 bytes)
+  - Coding: Standard (5-of-8)
+  - Encode into 8 shards, then drop shards at indices 0, 2, and 6 (leaving exactly 5).
+- **Expected:** Reconstruction succeeds; recovered bytes equal the original artifact.
+- **Spec reference:** §6 — "standard: 5 data, 3 parity (5-of-8)"
+
+### ERASURE-02: Standard (5-of-8) recovery fails with only 4 shards
+
+- **Description:** Standard erasure coding cannot reconstruct from fewer than 5 shards.
+- **Input:**
+  - Artifact: `"Test data for reconstruction with missing shards"` (UTF-8 bytes)
+  - Coding: Standard (5-of-8)
+  - Encode into 8 shards, then drop shards at indices 0, 2, 4, and 6 (leaving only 4).
+- **Expected:** Reconstruction MUST fail (insufficient shards).
+- **Spec reference:** §6 — Standard requires minimum 5 of 8 shards
