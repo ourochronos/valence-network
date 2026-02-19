@@ -22,43 +22,42 @@ Status: **Draft** — design decisions captured, spec amendments not yet written
 
 ---
 
-## 2. Daily Rent Cycles with Spot Pricing
+## 2. 24-Hour Payout Cycles with Flat Rate
 
 **Section:** §6 (Content)
 
-**Rationale:** 30-day cycles with price locking + convergence were designed to protect against monthly price shocks. With ×1M precision, daily cycles are viable and make the storage market much more responsive. Price locking becomes unnecessary — a bad price only lasts 24 hours.
+**Rationale:** 30-day cycles with price locking + convergence were over-engineered. At small scale (20-50 nodes), capacity won't be scarce. Daily cycles keep the market responsive without complex pricing.
 
 **Changes:**
 - Rent payout cycle: 30 days → 24 hours
-- **Spot pricing:** Rent computed daily at current market rate. No price locking at replication time.
-- Scarcity multiplier uses **7-day moving average** of network utilization (smooths daily noise)
-- Scarcity curve unchanged: `1 + 99 × utilization⁴`
+- **Flat rate** per GB per day (set at genesis, adjustable via governance)
+- No price locking, no convergence math, no scarcity multiplier
 
 **Eliminates:**
 - Price locking at replication time
-- Convergence rate math (20%/cycle, 30% accelerated at >10× divergence)
+- Convergence rate math (20%/cycle, 30% accelerated)
 - `cycles_elapsed × 3 / 10` rational arithmetic
-- All price-lock conformance tests
-
-**Keeps:**
 - Scarcity multiplier `1 + 99 × utilization⁴`
-- Rent exemption during voting (with ≥3 endorsements)
-- CONTENT_WITHDRAW with 24h delay
+- All price-lock and convergence conformance tests
+
+**Future:** Scarcity pricing and moving average smoothing can be introduced via governance when the network is large enough for capacity to matter.
 
 ---
 
-## 3. Prepaid Rent Escrow
+## 3. Full Copies Instead of Erasure Coding
 
 **Section:** §6 (Content)
 
-**Rationale:** Prevents the attack where someone commits storage, gets content replicated, then craters their rep — leaving providers holding shards with no rent income.
+**Rationale:** Erasure coding (Reed-Solomon, shard coordination, bucket math) is complex infrastructure for a small network. At 20-50 nodes, full copies are simpler, easier to verify, and sufficient for redundancy.
 
 **Change:**
-- Rep is **locked** for the next payout cycle upfront when committing content
-- Each cycle, locked rep transfers to providers
-- If available rep (total minus locked) drops below floor, can't commit more
-- If total rep drops below locked amount, content evicted (lowest-adoption first)
-- Grace period: 1 cycle before eviction (allows recovery or transfer)
+- Content is stored as full copies, not erasure-coded shards
+- Consumer specifies number of copies in REPLICATE_REQUEST (1-5, default 3)
+- **100MB file size cap** (can be raised via governance)
+- Storage challenges verify the full copy (hash of content, not shard proofs)
+- No shard assignment, no shard coordination, no encoding/decoding
+
+**Future:** Erasure coding can be introduced when files get bigger and storage gets expensive. The consumer-chosen parts/buckets design (2-32 parts, K-of-N reconstruction) is documented but deferred.
 
 ---
 
@@ -66,35 +65,29 @@ Status: **Draft** — design decisions captured, spec amendments not yet written
 
 **Section:** §6 (Content) — new message types
 
-**Rationale:** Providers whose capacity drops should be able to hand off obligations gracefully rather than failing challenges. Consumers who want to leave should be able to transfer rather than withdraw.
+**Rationale:** Providers whose capacity drops should be able to hand off gracefully rather than failing challenges.
 
 **New message types:**
-- `RENT_TRANSFER` — provider or consumer initiates transfer of storage obligation to another party
-- `RENT_TRANSFER_ACK` — receiving party confirms acceptance
+- `RENT_TRANSFER` — provider initiates transfer of storage obligation to another provider
+- `RENT_TRANSFER_ACK` — receiving provider confirms acceptance
 
 **Economics:**
-- Transfer fee: small rep cost to initiator (TBD, order of 0.001)
+- Transfer fee: small rep cost to initiator (TBD — needs economics pass)
 - Transfer fee << failure penalty (strong incentive to transfer rather than fail)
-- Shards must be transmitted to new provider before transfer is valid
-- No fee if transfer is due to capacity below minimum threshold (graceful degradation)
+- Content must be transmitted to new provider before transfer is valid
 
 ---
 
-## 5. QoS by Reputation (No Bandwidth Economy)
+## 5. QoS by Reputation
 
 **Section:** §3 (Transport) or new subsection
 
-**Rationale:** A full bandwidth market (metering, per-peer accounting, transit compensation) is an unsolved problem in P2P networks. Proof-of-relay is open research. Instead, use reputation as a natural QoS signal.
+**Rationale:** A full bandwidth economy is an unsolved problem in P2P. Instead, use reputation as a natural QoS signal.
 
 **Change:**
 - Peers prioritize serving higher-rep nodes (bandwidth, latency, connection slots)
 - No bandwidth metering, no per-peer accounting, no transit fees
-- No new message types needed — this is local peer behavior, not protocol
-
-**Deferred:**
-- Bandwidth metering and accounting
-- Transit/relay compensation
-- Per-provider bandwidth pricing
+- Local peer behavior, not protocol-level enforcement
 
 ---
 
@@ -102,117 +95,44 @@ Status: **Draft** — design decisions captured, spec amendments not yet written
 
 **Section:** §6 (Content), §9 (Reputation)
 
-**Rationale:** Flat -0.05 per failed storage challenge is catastrophic for honest providers with infrastructure issues. A provider with 21 storage obligations who has a power outage loses months of earned reputation in one event. The risk/reward asymmetry discourages participation.
+**Rationale:** Flat -0.05 per failed challenge is catastrophic for honest providers. A power outage shouldn't cost months of earned reputation. Penalties should start small and escalate — honest failures are cheap, abandonment is expensive.
 
 **Change:** Penalties stack within a **7-day rolling window:**
 
 | Failure # (in window) | Penalty |
 |----------------------|---------|
-| 1st | -0.000100 |
-| 2nd | -0.000500 |
-| 3rd | -0.002000 |
-| 4th | -0.010000 |
-| 5th+ | -0.050000 |
+| 1st | small |
+| 2nd | larger |
+| 3rd | significant |
+| 4th+ | harsh |
+
+Specific values TBD — need to model real scenarios (home user missing 1 challenge/week, provider down 4 hours, etc.) before picking numbers.
 
 - Window resets as challenges are passed
-- Distinguishes timeout (node offline) from wrong proof (data loss): timeout gets grace window + retry; wrong proof is immediate penalty
-- Total penalty per 24h cycle is implicitly capped by the stacking curve
-
-**Replaces:** Flat -0.05 per failed challenge, flat -0.002 accept-and-abandon penalty.
+- Timeout (node offline) vs wrong proof (data loss) may warrant different treatment
 
 ---
 
-## 7. Availability Tiers
-
-**Section:** §6 (Content) — new subsection
-
-**Rationale:** The current spec treats all storage providers as equivalent. Real providers range from laptops that sleep to cloud instances with SLAs. The protocol should let providers advertise what they actually offer and let uploaders choose.
-
-**New concept:** Providers declare an availability tier in REPLICATE_ACCEPT:
-
-| Tier | Uptime Target | Rent Multiplier | Challenge Frequency | Grace Window | Typical Hardware |
-|------|--------------|-----------------|--------------------:|-------------:|-----------------|
-| `casual` | ~90% | 0.3× | Lower | Longer | Laptops, home machines |
-| `reliable` | ~99% | 1.0× (baseline) | Standard | Standard | Home servers, desktops |
-| `dedicated` | ~99.9% | 2.0× | Higher | Shorter | Cloud, dedicated servers |
-
-- Uploaders specify desired tier in REPLICATE_REQUEST
-- Challenge frequency and grace windows calibrated per tier
-- Casual providers earn less but aren't punished for being normal computers
-- Dedicated providers earn more but are held to stricter standards
-
----
-
-## 8. Identity-Group Challenge Routing
-
-**Section:** §1 (Identity), §6 (Content)
-
-**Rationale:** Users with multiple devices (laptop + cloud instances) linked under one DID should benefit from combined availability. A challenge should pass if ANY device in the identity group can answer.
-
-**Change:**
-- Storage challenges for content held by an identity route to **all devices** in that identity group
-- Any device holding the challenged shard can respond
-- One valid response = challenge passed
-- Only fails if NO device responds within the tier's grace window
-- Identity group counts as **one logical provider** for diversity requirements (can't game ASN diversity with your own devices)
-
-**Effect:** Multi-device users naturally have higher availability (union of device uptimes, not intersection). A home user with one cloud instance becomes a reliable provider even if their laptop sleeps.
-
----
-
-## 9. Daily-Adjusted Recurring Rep Values
+## 7. Daily-Adjusted Recurring Rep Values
 
 **Section:** §9 (Reputation)
 
-**Rationale:** With 24h cycles replacing 30-day cycles, recurring rep values need adjustment to maintain the same monthly effect.
+**Rationale:** With 24h cycles replacing 30-day cycles, recurring rep values divide by ~30 to maintain the same monthly effect.
 
 | Value | v0 (monthly) | v1 (daily) | Monthly equivalent |
 |-------|-------------|-----------|-------------------|
 | Inactivity penalty | -0.02/month | -0.000667/day | -0.02/month |
 | Uptime reward | +0.01/cycle | +0.000333/day | +0.01/month |
 
-Discrete event values unchanged:
-- Adoption reward: +0.05
-- Transfer fee: ~0.001 (new)
-- Storage challenge failure: per stacking curve (see §6 above)
+Discrete event values (adoption reward, flagging penalties) unchanged.
 
 ---
 
-## 10. Consumer-Chosen Erasure Coding
-
-**Section:** §6 (Content)
-
-**Rationale:** v0 hardcodes 5-of-8 erasure coding. Consumers should choose redundancy based on what their content is worth.
-
-**Change:** Consumer specifies in REPLICATE_REQUEST:
-```json
-{
-  "parts": 8,           // total shards (N), range: 2–32
-  "buckets": 5,         // shards needed to reconstruct (K), range: 1–(parts-1)
-  "provider_tier": "reliable"
-}
-```
-
-- **Parts** (N): total shards created. Max 32 (Reed-Solomon GF(2^8) allows 255, but 32 is plenty redundant and keeps coordination overhead sane).
-- **Buckets** (K): minimum shards needed to reconstruct. Must be < parts.
-- **Provider tier**: from change #7.
-
-Cost = parts × tier_multiplier × shard_size × scarcity_rate. More parts and higher tier = more expensive.
-
-Examples:
-- Don't care much: 4 parts, 3 buckets, casual — cheap
-- Default: 8 parts, 5 buckets, reliable — balanced
-- Critical: 16 parts, 6 buckets, dedicated — survive 10 provider failures on high-quality storage
-
-Cap of 32 can be relaxed via governance proposal if the network grows large enough.
-
----
-
-## 11. Content Metadata and Search
+## 8. Content Metadata and Search
 
 **Section:** §7 (Proposals) — PROPOSE schema, new subsection on search conventions
 
-**Rationale:** The protocol treats content as opaque bytes. Discovery requires metadata. The minimum viable approach: add structured fields to PROPOSE, let nodes build local search indexes, defer richer schemas to network governance.
+**Rationale:** Discovery requires metadata. Minimum viable: structured fields in PROPOSE, local search indexes.
 
 **Schema additions to PROPOSE payload:**
 ```json
@@ -229,28 +149,37 @@ Both fields optional. Nodes index PROPOSE metadata they receive via gossip. Sear
 - Specificity over breadth: `llama3-8b` better than `ai`
 - Include content format when useful: `safetensors`, `csv`, `markdown`
 - Domain prefix for namespacing: `ml/llama3`, `lang/rust`, `data/benchmark`
-- Keep them discoverable — tags are the primary search surface
 
 **Description conventions (guidance, not enforced):**
 - First line: what it is (one sentence)
 - Then: why someone would want it, what it's compatible with, known limitations
-- Include version numbers, model names, dataset sizes — the concrete details that help people decide before fetching
+- Include version numbers, model names, dataset sizes — concrete details
 
-**What's explicitly NOT in v1:**
-- Canonical tag taxonomy (let conventions emerge through usage)
-- Mandatory fields beyond what's in PROPOSE today
-- Embeddings (any node can compute and publish as sidecar content — no mandated model)
-- Categories (can be proposed as metadata standards via governance later)
-
-**Future path:** Metadata standards are themselves proposable content. A standard like "ML Model Card" is a document that says "include these fields when publishing models." Nodes that adopt it index accordingly. Good standards get adopted through stigmergy. Bad ones fade. The protocol provides the floor; the network builds the ceiling.
+**Future path:** Metadata standards are proposable content. Good standards get adopted through stigmergy. Bad ones fade.
 
 ---
 
-## Changes NOT included (deferred)
-- **Mutable content (CONTENT_REF)** — named pointers, version chains, encrypted volume sync. Too complex for MVP. Protocol stays immutable content-addressed blobs. Publish new content + supersede old.
+## Deferred (post-MVP)
+
+- **Erasure coding** — consumer-chosen parts/buckets (2-32 parts, K-of-N). When files get bigger and storage gets expensive.
+- **Scarcity pricing** — `1 + 99 × utilization⁴` with moving average smoothing. When capacity actually matters.
+- **Prepaid rent escrow** — lock rep upfront, evict on shortfall. When anonymous bad actors are realistic.
+- **Availability tiers** — casual/reliable/dedicated with calibrated challenges. Let tiers emerge from uptime data instead.
+- **Identity-group challenge routing** — any device answers challenges. With small stacking penalties, a missed challenge is trivial. Not worth the complexity.
+- **Mutable content (CONTENT_REF)** — named pointers, version chains, encrypted volume sync. Too complex for MVP.
 - **Bandwidth economy** — per-peer metering, transit compensation. Replaced by QoS-by-rep.
 - **Routing incentives** — proof-of-relay. Open research problem.
 - **PRODUCT.md parity with spec** — multiple values diverge (starting rep 0.5 vs 0.2, capability thresholds, rep subcategories). Needs systematic audit.
+
+---
+
+## Open: Economics Pass Needed
+
+Before implementing, need to model:
+- **Flat rent rate**: What's the right rep-per-GB-per-day at genesis?
+- **Penalty curve**: Specific stacking values grounded in real scenarios
+- **Transfer fee**: Small enough to incentivize transfer over failure, large enough to prevent churn farming
+- **Daily rep values**: Verify monthly equivalents produce the right capability ramp timeline (how long from 0.2 to 0.3? to 0.5?)
 
 ---
 
@@ -259,4 +188,5 @@ Both fields optional. Nodes index PROPOSE metadata they receive via gossip. Sear
 - All changes target `valence-bond` (production fork), not `valence-network-rs` (frozen ref impl)
 - Spec amendments should be written against `valence-network/docs/v0.md` as a new version section or a `v1.md`
 - Conformance tests for changed behaviors need rewriting
-- FixedPoint type in ref impl needs scale change (10,000 → 1,000,000)
+- FixedPoint type needs scale change (10,000 → 1,000,000)
+- Erasure coding code stays in bond but is unused until post-MVP
