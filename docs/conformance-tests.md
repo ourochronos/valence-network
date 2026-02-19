@@ -294,19 +294,22 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
 
 ### MANIFEST-01: Shard manifest hash computation
 
-- **Description:** Manifest hash = SHA-256 of shard hashes sorted lexicographically, concatenated without delimiters, with content_hash appended — all as UTF-8 bytes.
+- **Description:** Manifest hash = SHA-256 of: shard_count as 4-byte big-endian integer, then shard hashes sorted lexicographically as hex strings concatenated without delimiters, then content_hash hex string — all as UTF-8 bytes except shard_count which is raw bytes.
 - **Input:**
   - `shard_hashes`: `["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"]`
   - `content_hash`: `"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"`
+  - `shard_count`: 3
 - **Sorted shard hashes:**
   1. `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`
   2. `bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb`
   3. `cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc`
-- **Concatenated input (UTF-8 string, 256 chars):**
+- **Concatenated input (260 bytes total):**
   ```
+  [0x00, 0x00, 0x00, 0x03] (shard_count as 4-byte BE u32)
+  followed by UTF-8 bytes of:
   aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
   ```
-- **Expected manifest_hash:** `648c162914266d5db16db4b797e2bdc6afe56646ea6984085ccd705276d95be4`
+- **Expected manifest_hash:** `36edd51a274af1b3411c0eaad5b414de7c492b665a2e194a13a0e6dea7370e86`
 - **Spec reference:** §6 — Content Delivery, manifest_hash
 
 ---
@@ -1169,3 +1172,318 @@ All tests use the following Ed25519 keypairs unless otherwise noted.
   - Rep 0.8+: **10 comments per hour**
   - Per-proposal: **3 per identity per rolling 24-hour window** (all reputation levels)
 - **Spec reference:** §7 — COMMENT
+
+---
+
+## 20. State Reconciliation — Sync Protocol (§5)
+
+### SYNC-01: Sync phase ordering
+
+- **Description:** Phases 1, 2, and 3 MUST complete sequentially in that order. Phases 4 and 5 MAY proceed in parallel after phase 3 completes.
+- **Input:** Node joins network and begins state reconciliation.
+- **Expected behavior:**
+  - Phase 1 (Identity: DID_LINK, DID_REVOKE, KEY_ROTATE) completes before phase 2 starts.
+  - Phase 2 (Reputation: REPUTATION_GOSSIP) completes before phase 3 starts.
+  - Phase 3 (Proposals & Votes: PROPOSE, VOTE, COMMENT) completes before phases 4/5 start.
+  - Phase 4 (Content Metadata: SHARE, FLAG, CONTENT_WITHDRAW, RENT_PAYMENT) and Phase 5 (Storage State: REPLICATE_REQUEST, REPLICATE_ACCEPT, SHARD_ASSIGNMENT, SHARD_RECEIVED) MAY run in parallel after phase 3.
+  - Starting phase 2 before phase 1 completes → **violation**.
+  - Starting phase 4 before phase 3 completes → **violation**.
+  - Running phases 4 and 5 simultaneously after phase 3 → **allowed**.
+- **Spec reference:** §5 — Sync Phases
+
+### SYNC-02: Gossip buffer phase classification
+
+- **Description:** Live gossip messages received during sync are classified by phase. Messages for completed phases are applied immediately; messages for current or future phases are buffered.
+- **Input:**
+  - Node is currently syncing phase 2 (Reputation). Phase 1 (Identity) is already committed.
+  - Receives live gossip: DID_REVOKE (phase 1), VOTE (phase 3), REPUTATION_GOSSIP (phase 2).
+- **Expected:**
+  - DID_REVOKE (phase 1 — already completed): **applied immediately** (validated against committed identity state).
+  - REPUTATION_GOSSIP (phase 2 — current phase): **buffered**, applied in timestamp order when phase 2 completes.
+  - VOTE (phase 3 — future phase): **buffered**, applied in timestamp order when phase 3 completes.
+- **Spec reference:** §5 — Gossip buffering during sync
+
+### SYNC-03: Gossip buffer priority eviction (phase 1)
+
+- **Description:** When the gossip buffer for a phase fills, messages are evicted by priority. Phase 1 priority: DID_REVOKE > KEY_ROTATE > DID_LINK.
+- **Input:**
+  - Phase 1 gossip buffer is full (at capacity limit).
+  - New DID_REVOKE message arrives for phase 1 buffer.
+  - Buffer contains: 10 DID_LINK messages, 5 KEY_ROTATE messages, 2 DID_REVOKE messages.
+- **Expected:**
+  - The oldest DID_LINK message is evicted first (lowest priority, oldest first within priority).
+  - The new DID_REVOKE is buffered.
+  - If all DID_LINK messages were already evicted, the oldest KEY_ROTATE would be evicted next.
+  - DID_REVOKE messages are evicted last (highest priority).
+- **Spec reference:** §5 — Gossip buffer priority
+
+### SYNC-04: Gossip buffer size cap
+
+- **Description:** The gossip buffer per phase is bounded to 100,000 messages or 100 MiB, whichever is reached first.
+- **Input scenarios:**
+  - Buffer has 99,999 messages totaling 50 MiB → new message **accepted**.
+  - Buffer has 100,000 messages totaling 50 MiB → new message triggers **eviction** (message count limit).
+  - Buffer has 50,000 messages totaling 100 MiB → new message triggers **eviction** (byte limit).
+  - Buffer has 99,999 messages totaling 99.9 MiB → new message **accepted** (neither limit reached).
+- **Expected:** When either limit is reached, lowest-priority oldest messages are evicted. The node MUST track the timestamp of the oldest dropped message per phase for follow-up incremental sync.
+- **Spec reference:** §5 — Gossip buffer cap
+
+### SYNC-05: REPUTATION_CURRENT trimmed minimum aggregation (5 peers)
+
+- **Description:** With 5 sync peers reporting REPUTATION_CURRENT for a subject, discard the highest and lowest, then use the minimum of the remaining 3.
+- **Input (fixed-point ×10,000):**
+  - Peer 1 reports subject X reputation: 5000 (0.50)
+  - Peer 2 reports subject X reputation: 6000 (0.60)
+  - Peer 3 reports subject X reputation: 7000 (0.70)
+  - Peer 4 reports subject X reputation: 4000 (0.40)
+  - Peer 5 reports subject X reputation: 8000 (0.80)
+- **Computation:**
+  ```
+  Sorted: [4000, 5000, 6000, 7000, 8000]
+  Discard lowest (4000) and highest (8000)
+  Remaining: [5000, 6000, 7000]
+  Result = min(5000, 6000, 7000) = 5000
+  ```
+- **Expected result:** `5000` (represents 0.50)
+- **Spec reference:** §5 — REPUTATION_CURRENT integrity
+
+### SYNC-06: REPUTATION_CURRENT sparse coverage
+
+- **Description:** When fewer than 5 sync peers report a value, adjusted aggregation rules apply.
+- **Input (fixed-point ×10,000) — 4 peers:**
+  - Reports: [4000, 5000, 7000, 8000]
+  - Computation: discard only the highest (8000), min of bottom 3 → min(4000, 5000, 7000) = 4000
+  - **Expected:** `4000`
+- **Input — 3 peers:**
+  - Reports: [5000, 6000, 7000]
+  - Computation: use minimum directly (no trim) → min(5000, 6000, 7000) = 5000
+  - **Expected:** `5000`
+- **Input — 2 peers:**
+  - Reports: [5000, 7000]
+  - **Expected:** Fall back to **full REPUTATION_GOSSIP replay** for this subject.
+- **Input — 1 peer:**
+  - Reports: [6000]
+  - **Expected:** Fall back to **full REPUTATION_GOSSIP replay** for this subject.
+- **Spec reference:** §5 — REPUTATION_CURRENT sparse coverage
+
+### SYNC-07: REPUTATION_CURRENT divergence threshold
+
+- **Description:** If the difference between the 2nd-highest and 2nd-lowest reported values exceeds 0.1, fall back to full replay.
+- **Input (fixed-point ×10,000) — 5 peers:**
+  - Reports: [3000, 4000, 7000, 8000, 9000]
+  - Sorted: [3000, 4000, 7000, 8000, 9000]
+  - 2nd-lowest = 4000, 2nd-highest = 8000
+  - Difference = 8000 − 4000 = 4000 (represents 0.40) > 1000 (0.1)
+  - **Expected:** Fall back to **full REPUTATION_GOSSIP replay** for this subject.
+- **Input — 5 peers (within threshold):**
+  - Reports: [5000, 5500, 6000, 6200, 6500]
+  - 2nd-lowest = 5500, 2nd-highest = 6200
+  - Difference = 6200 − 5500 = 700 (0.07) ≤ 1000 (0.1)
+  - **Expected:** Proceed with trimmed minimum aggregation. Discard 5000 and 6500, min(5500, 6000, 6200) = `5500`.
+- **Spec reference:** §5 — REPUTATION_CURRENT divergence threshold
+
+### SYNC-08: Sync completeness criteria
+
+- **Description:** A node is sync-complete when its identity and proposal Merkle roots each match at least 3 of 5 sync peers.
+- **Input:**
+  - Identity Merkle root matches peers 1, 2, 3 (3/5) ✓
+  - Proposal Merkle root matches peers 1, 3, 4 (3/5) ✓
+  - All phases completed, at least one REPUTATION_GOSSIP batch from each peer ✓
+- **Expected:** Node transitions to `sync_status: "synced"`. MAY now vote, propose, flag, and participate in storage.
+- **Input (insufficient agreement):**
+  - Identity Merkle root matches peers 1, 2 (2/5) ✗
+  - Proposal Merkle root matches peers 1, 2, 3, 4, 5 (5/5) ✓
+- **Expected:** Node does NOT transition to "synced". Must resolve identity Merkle divergence first.
+- **Spec reference:** §5 — Sync Completeness
+
+### SYNC-09: Snapshot freshness
+
+- **Description:** Snapshots with `snapshot_timestamp` older than 24 hours MUST be rejected.
+- **Input scenarios:**
+  - `snapshot_timestamp` = current_time − 86,400,000 ms (exactly 24h) → **accepted** (at boundary).
+  - `snapshot_timestamp` = current_time − 86,400,001 ms (24h + 1ms) → **MUST reject**.
+  - `snapshot_timestamp` = current_time − 43,200,000 ms (12h) → **accepted**.
+  - `snapshot_timestamp` = current_time + 300,001 ms (5 min + 1ms in future) → **MUST reject** (standard timestamp tolerance).
+- **Spec reference:** §5 — State Snapshots
+
+### SYNC-10: Snapshot publisher reputation threshold
+
+- **Description:** Only nodes with reputation ≥ 0.7 SHOULD publish snapshots. Syncing nodes MUST request snapshots from peers with reputation ≥ 0.7.
+- **Input scenarios:**
+  - Peer with reputation 7000 (0.70) publishes STATE_SNAPSHOT → **valid publisher**.
+  - Peer with reputation 6999 (0.6999) publishes STATE_SNAPSHOT → **below threshold**, syncing nodes MUST NOT use this snapshot.
+  - Peer with reputation 8000 (0.80) publishes STATE_SNAPSHOT → **valid publisher**.
+- **Spec reference:** §5 — State Snapshots (publisher threshold)
+
+### SYNC-11: Snapshot minimum publishers
+
+- **Description:** A syncing node MAY bootstrap from a snapshot if it receives matching Merkle roots from ≥5 snapshot publishers across ≥3 ASNs, plus 2 non-publisher cross-check peers.
+- **Input scenarios:**
+  - 5 publishers from 3 ASNs, all with matching identity + proposal Merkle roots → **snapshot bootstrap allowed**.
+  - 5 publishers from 2 ASNs (all matching) → **MUST NOT bootstrap** (insufficient ASN diversity).
+  - 4 publishers from 3 ASNs (all matching) → **MUST NOT bootstrap** (insufficient publishers).
+  - 5 publishers from 3 ASNs (matching), but cannot find 2 non-publisher cross-check peers after 10 additional connections → **MAY proceed with cross-checking against any 2 synced non-publisher peers** (small network fallback).
+- **Spec reference:** §5 — State Snapshots (minimum publishers, post-snapshot verification)
+
+### SYNC-12: Degraded mode 50% vote weight
+
+- **Description:** Nodes in degraded mode with phases 1–2 complete MAY vote with 50% weight. The 50% reduction applies uniformly to all degraded states.
+- **Input:**
+  - Node has completed phases 1 (Identity) and 2 (Reputation) but phase 3 failed.
+  - Node enters degraded mode (`sync_status: "degraded"`).
+  - Node casts a VOTE with reputation weight 6000 (0.60).
+- **Expected:**
+  - Node MAY vote (phases 1–2 complete).
+  - VOTE message MUST include `sync_status: "degraded"`.
+  - Other nodes apply 50% weight: effective weight = 3000 (0.30).
+  - Weight reduction applies via `min(self_declared_weight, weight_from_observed_sync_status)`.
+- **Input (phases 1–2 NOT complete):**
+  - Node in degraded mode, only phase 1 complete.
+  - **Expected:** Node MUST NOT vote (phases 1–2 not both complete).
+- **Spec reference:** §5 — Degraded mode
+
+### SYNC-13: Degraded mode cold start interaction
+
+- **Description:** During cold start, degraded nodes count as full participants for headcount but their votes count as 0.5 in the endorsement calculation.
+- **Input:**
+  - Cold start active. 10 nodes vote: 7 synced, 3 degraded (all with phases 1–2 complete).
+  - All 10 endorse.
+- **Computation:**
+  ```
+  Total headcount: 10 (all count as participants)
+  Effective endorsement votes: 7 × 1.0 + 3 × 0.5 = 8.5
+  Effective total votes: 8.5 (all endorsed)
+  Endorsement ratio: 8.5 / 8.5 = 1.0 ≥ 0.67 ✓
+  ```
+- **Input (close margin):**
+  - 10 nodes: 7 synced endorse, 3 degraded reject.
+  - Effective endorsement: 7 × 1.0 = 7.0
+  - Effective rejection: 3 × 0.5 = 1.5
+  - Endorsement ratio: 7.0 / (7.0 + 1.5) = 7.0 / 8.5 = 0.8235 ≥ 0.67 ✓
+  - **Expected:** Ratified.
+- **Spec reference:** §5 — Degraded mode cold start interaction
+
+### SYNC-14: DID_REVOKE retroactive invalidation
+
+- **Description:** When a DID_REVOKE is applied, the node MUST scan committed state for messages from the revoked key with timestamps after the revocation's `effective_from` and invalidate them.
+- **Input:**
+  1. Identity: root=A, child=B. B has voted on proposals P1, P2, P3.
+  2. DID_REVOKE arrives: `revoked_key` = B, `effective_from` = T.
+  3. B's votes: P1 vote at T−1000 (before effective_from), P2 vote at T+1000 (after), P3 vote at T+5000 (after).
+- **Expected:**
+  - P1 vote (timestamp < effective_from): **retained** (vote was before suspected compromise).
+  - P2 vote (timestamp > effective_from): **invalidated**.
+  - P3 vote (timestamp > effective_from): **invalidated**.
+  - Any buffered gossip messages from B MUST be discarded at buffer-drain time.
+  - Revocation status MUST be checked both when buffering and when applying buffered messages.
+- **Spec reference:** §5 — Retroactive invalidation
+
+### SYNC-15: Incremental sync identity phase jitter
+
+- **Description:** Identity messages (phase 1) are included in every 3rd to 5th incremental sync cycle (randomly selected), approximately once per 45–75 minutes. Event-triggered on DID_REVOKE.
+- **Input scenarios:**
+  - Incremental sync interval: 15 minutes. Identity phase included in cycles 3, 7, 12 (random selection within 3rd–5th each time).
+  - **Expected:** Identity sync occurs approximately every 45–75 minutes (3–5 × 15 min).
+  - Previous cycle's live gossip included a DID_REVOKE message.
+  - **Expected:** Next incremental sync MUST include identity messages **regardless of cycle counter**.
+- **Spec reference:** §5 — Incremental Sync (identity phase jitter)
+
+### SYNC-16: Sync jitter scaling (partition-aware)
+
+- **Description:** Sync jitter scales based on partition detection. Normal jitter is 0–30s. Partition-detected jitter is 0–300s.
+- **Input scenarios:**
+  - Node reconnects, Merkle divergence from ≤20% of peers → base jitter: **uniform 0–30 seconds**.
+  - Node reconnects, Merkle divergence from >20% of peers → elevated jitter: **uniform 0–300 seconds**.
+  - Node offline for 36,000 seconds (10 hours) → jitter: `min(300, 36000 / 100)` = **min(300, 360) = 300 seconds**.
+  - Node offline for 5,000 seconds (~83 min) → jitter: `min(300, 5000 / 100)` = **min(300, 50) = 50 seconds**.
+  - Node offline for 100,000 seconds (~27.8 hours) → jitter: `min(300, 100000 / 100)` = **min(300, 1000) = 300 seconds**.
+- **Spec reference:** §5 — Backpressure (jitter)
+
+### SYNC-17: Sync peer requirements
+
+- **Description:** Nodes MUST sync from at least 5 peers from at least 3 distinct ASNs. First-join requires at least one bootstrap node.
+- **Input scenarios:**
+  - 5 peers from 3 ASNs (ASN1: 2 peers, ASN2: 2 peers, ASN3: 1 peer) → **valid sync peer set**.
+  - 5 peers from 2 ASNs → **MUST NOT proceed** (insufficient ASN diversity).
+  - 4 peers from 4 ASNs → **MUST NOT proceed** (insufficient peer count).
+  - First join (`since_timestamp = 0`): 5 peers from 3 ASNs, none are bootstrap nodes → **MUST NOT proceed** (first-join requires bootstrap node).
+  - First join: 5 peers from 3 ASNs, 1 is a bootstrap node → **valid**.
+  - Incremental sync (not first join): 5 peers from 3 ASNs, no bootstrap → **valid** (bootstrap requirement only for first join).
+- **Spec reference:** §5 — Sync Peer Selection
+
+### SYNC-18: Mid-sync stale phase check
+
+- **Description:** If more than 1 hour has elapsed since phase 1 completed, the node MUST re-run phase 1 before resuming later phases.
+- **Input scenarios:**
+  - Phase 1 completed at T. Currently at T + 3,599,999 ms (< 1 hour). Resuming phase 3.
+  - **Expected:** Resume phase 3 normally (phase 1 still fresh).
+  - Phase 1 completed at T. Currently at T + 3,600,001 ms (> 1 hour). Resuming phase 3.
+  - **Expected:** MUST re-run phase 1 before resuming phase 3.
+- **Spec reference:** §5 — Mid-Sync Failure Recovery
+
+### SYNC-19: Sync serving uptime credit limits
+
+- **Description:** Sync serving earns uptime credit with anti-farming limits: at most 1 counted interaction per peer per 15 minutes, only for non-empty responses, from ≥3 distinct peers in 24 hours.
+- **Input scenarios:**
+  - Node serves sync response with non-empty messages to peer X at T. Same peer X requests again at T + 14 min.
+  - **Expected:** Only the first interaction counts for uptime credit (< 15 min gap).
+  - Node serves sync to peer X at T, peer Y at T + 5 min, peer Z at T + 10 min (all non-empty, 3 distinct peers).
+  - **Expected:** All 3 count. Meets ≥3 distinct peer requirement for uptime credit.
+  - Node serves sync to peer X and peer Y only (2 distinct peers) in a 24-hour window.
+  - **Expected:** Does NOT qualify for uptime credit (< 3 distinct peers).
+  - Node serves sync response with empty `messages` array to peer X.
+  - **Expected:** Does NOT count toward uptime credit (empty response).
+- **Spec reference:** §5 — Sync Serving Incentive
+
+### SYNC-20: Post-snapshot sync window
+
+- **Description:** After successful snapshot verification, incremental sync starts from `snapshot_timestamp − 1 hour` (safety margin).
+- **Input:**
+  - Snapshot verified with `snapshot_timestamp` = 1700000000000.
+  - **Expected:** Incremental sync uses `since_timestamp` = 1700000000000 − 3,600,000 = **1699996400000**.
+  - This ensures messages published slightly before the snapshot (including backdated messages) are captured.
+- **Spec reference:** §5 — State Snapshots (post-snapshot sync)
+
+---
+
+## 21. Identity Merkle Divergence Severity (§5, §12)
+
+### PART-06: Identity Merkle divergence — additive only (info)
+
+- **Description:** When identity Merkle divergence between two "synced" nodes involves only DID_LINK or KEY_ROTATE (additive messages), severity is info.
+- **Input:**
+  - Node A and Node B are both `sync_status: "synced"`.
+  - Identity Merkle roots diverge.
+  - Merkle narrowing reveals the difference is 2 DID_LINK messages present on A but not B.
+- **Expected:** Severity = **info**. Will converge via gossip. No immediate action required.
+- **Spec reference:** §5 — Identity divergence severity, §12 — Severity Classification
+
+### PART-07: Identity Merkle divergence — DID_REVOKE (critical)
+
+- **Description:** When identity Merkle divergence involves any DID_REVOKE, severity is critical regardless of other message types.
+- **Input:**
+  - Node A and Node B are both `sync_status: "synced"`.
+  - Identity Merkle roots diverge.
+  - Merkle narrowing reveals: 1 DID_REVOKE present on A but not B.
+- **Expected:**
+  - Severity = **critical** (security-relevant).
+  - Node B MUST immediately fetch the missing DID_REVOKE.
+  - Node B MUST revalidate any messages accepted from the revoked key.
+- **Spec reference:** §5 — Identity divergence severity, §12 — Severity Classification
+
+### PART-08: Identity Merkle divergence — mixed additive + subtractive (critical)
+
+- **Description:** Mixed divergence (additive + subtractive) is classified as critical because subtractive takes precedence.
+- **Input:**
+  - Divergence includes: 3 DID_LINK (additive) + 1 DID_REVOKE (subtractive).
+- **Expected:** Severity = **critical** (subtractive takes precedence over additive).
+- **Spec reference:** §5 — Identity divergence severity, §12 — Severity Classification
+
+### PART-09: Identity divergence does NOT trigger partition detection for syncing nodes
+
+- **Description:** Peers MUST NOT trigger partition detection based on Merkle divergence with nodes whose `sync_status` is "syncing".
+- **Input:**
+  - Node A (`sync_status: "synced"`) compares identity Merkle root with Node B (`sync_status: "syncing"`).
+  - Roots diverge significantly.
+- **Expected:** No partition event triggered. Divergence is expected for syncing nodes. Partition detection applies only between two "synced" nodes.
+- **Spec reference:** §5 — Sync Status
